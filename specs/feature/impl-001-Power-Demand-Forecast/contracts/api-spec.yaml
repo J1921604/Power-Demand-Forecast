@@ -1,0 +1,364 @@
+openapi: 3.0.3
+info:
+  title: 電力需要予測システム API
+  version: 1.0.0
+  description: |
+    電力需要予測システムのHTTPサーバーAPI仕様書。
+    ダッシュボード（フロントエンド）とPython HTTPサーバー（バックエンド）間の通信を定義します。
+    
+    **ベースURL**: `http://localhost:8002`
+    
+    **認証**: 不要（ローカル環境のみ）
+    
+    **コンテンツタイプ**: `application/json`（一部`text/plain`）
+
+servers:
+  - url: http://localhost:8002
+    description: ローカル開発環境
+
+tags:
+  - name: データ処理
+    description: 電力需要データと気温データの統合処理
+  - name: モデル学習
+    description: 4つの機械学習モデルの学習実行
+  - name: 明日予測
+    description: 明日24時間の電力需要予測
+  - name: 組み合わせ検証
+    description: 最適学習年の自動探索
+
+paths:
+  /run-data:
+    post:
+      summary: データ処理実行
+      description: |
+        電力需要データ（juyo-YYYY.csv）と気温データ（temperature-YYYY.csv）を統合し、
+        機械学習用の特徴量（X.csv）とラベル（Y.csv）を生成します。
+      tags:
+        - データ処理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - years
+              properties:
+                years:
+                  type: array
+                  items:
+                    type: integer
+                    minimum: 2016
+                    maximum: 2024
+                  example: [2022, 2023, 2024]
+                  description: 学習対象年のリスト（2016-2024）
+      responses:
+        '200':
+          description: データ処理完了
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "データ処理が完了しました"
+                  files_generated:
+                    type: array
+                    items:
+                      type: string
+                    example: ["AI/data/X.csv", "AI/data/Y.csv", "AI/data/Xtrain.csv", "AI/data/Ytrain.csv", "AI/data/Xtest.csv", "AI/data/Ytest.csv"]
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /run-train:
+    post:
+      summary: モデル学習実行
+      description: |
+        指定されたモデル（LightGBM、Keras、RandomForest、Pycaret）を学習し、
+        RMSE、R²、MAEの精度指標を返します。
+      tags:
+        - モデル学習
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - model
+              properties:
+                model:
+                  type: string
+                  enum: [LightGBM, Keras, RandomForest, Pycaret]
+                  example: "LightGBM"
+                  description: 学習対象モデル
+      responses:
+        '200':
+          description: 学習完了
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  model:
+                    type: string
+                    example: "LightGBM"
+                  metrics:
+                    type: object
+                    properties:
+                      rmse:
+                        type: number
+                        format: float
+                        example: 456.78
+                        description: 平均二乗誤差
+                      r2:
+                        type: number
+                        format: float
+                        example: 0.87
+                        description: 決定係数（> 0.80が目標）
+                      mae:
+                        type: number
+                        format: float
+                        example: 345.12
+                        description: 平均絶対誤差
+                  model_file:
+                    type: string
+                    example: "AI/train/LightGBM/LightGBM_model.sav"
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 学習エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /run-tomorrow-data:
+    post:
+      summary: 明日気温データ取得
+      description: |
+        Open-Meteo APIから明日24時間の気温データを取得し、
+        tomorrow.csvに保存します（東京: 北緯35.6785、東経139.6823）。
+      tags:
+        - 明日予測
+      responses:
+        '200':
+          description: 気温データ取得完了
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "明日の気温データを取得しました"
+                  data_file:
+                    type: string
+                    example: "AI/tomorrow/tomorrow.csv"
+                  temperatures:
+                    type: array
+                    items:
+                      type: number
+                      format: float
+                    minItems: 24
+                    maxItems: 24
+                    example: [5.2, 4.8, 4.5, 4.2, 4.0, 4.5, 5.5, 7.0, 9.5, 12.0, 14.5, 16.0, 17.0, 17.5, 17.0, 15.5, 13.0, 11.0, 9.0, 8.0, 7.0, 6.5, 6.0, 5.5]
+        '500':
+          description: API通信エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Open-Meteo API利用不可
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /run-tomorrow:
+    post:
+      summary: 明日予測実行
+      description: |
+        学習済みモデルを使用して明日24時間の電力需要を予測し、
+        CSVファイルとPNGグラフ（16:9）を生成します。
+      tags:
+        - 明日予測
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - model
+              properties:
+                model:
+                  type: string
+                  enum: [LightGBM, Keras, RandomForest, Pycaret]
+                  example: "LightGBM"
+                  description: 予測使用モデル
+      responses:
+        '200':
+          description: 予測完了
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  model:
+                    type: string
+                    example: "LightGBM"
+                  prediction_file:
+                    type: string
+                    example: "AI/tomorrow/LightGBM/LightGBM_tomorrow.csv"
+                  graph_file:
+                    type: string
+                    example: "AI/tomorrow/LightGBM/LightGBM_tomorrow.png"
+                  predictions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hour:
+                          type: integer
+                          minimum: 0
+                          maximum: 23
+                        predicted_kw:
+                          type: integer
+                          minimum: 0
+                    example: [{"hour": 0, "predicted_kw": 12500}, {"hour": 1, "predicted_kw": 12000}]
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: モデルファイル未検出
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 予測エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /run-optimize:
+    post:
+      summary: 組み合わせ検証実行
+      description: |
+        ローリング時系列交差検証により、最適な学習年組み合わせを自動探索します。
+        結果はテキストファイル（YYYY-MM-DD_{MODEL}_optimize_years.txt）に保存され、
+        メモ帳で自動オープンされます。
+      tags:
+        - 組み合わせ検証
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - model
+              properties:
+                model:
+                  type: string
+                  enum: [LightGBM, Keras, RandomForest, Pycaret]
+                  example: "LightGBM"
+                  description: 最適化対象モデル
+      responses:
+        '200':
+          description: 最適化完了
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  model:
+                    type: string
+                    example: "LightGBM"
+                  result_file:
+                    type: string
+                    example: "AI/train/LightGBM/2025-11-25_LightGBM_optimize_years.txt"
+                  top_combinations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        years:
+                          type: array
+                          items:
+                            type: integer
+                        rmse:
+                          type: number
+                          format: float
+                    example: [{"years": [2022, 2023, 2024], "rmse": 450.12}, {"years": [2021, 2023, 2024], "rmse": 455.67}]
+                  recommended_for_2025:
+                    type: array
+                    items:
+                      type: integer
+                    example: [2022, 2023, 2024]
+        '400':
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: 最適化エラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          example: "error"
+        error:
+          type: string
+          example: "Invalid model name: InvalidModel"
+        details:
+          type: string
+          example: "Allowed models: LightGBM, Keras, RandomForest, Pycaret"

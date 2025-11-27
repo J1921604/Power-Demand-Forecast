@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電力需要AI予測ダッシュボード</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            overflow-x: auto;
+            color-scheme: dark;
+        }
+
+        .container {
+            max-width: 1600px;
+            width: 100%;
+            min-height: 700px;
+            margin: 0 auto;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 255, 255, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .title {
+            font-size: 2.6rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 18px;
+            background: linear-gradient(45deg, #00ffff, #00ff88, #ff00ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+
+        .subtitle {
+            color: #00ffff;
+            font-size: 1.2rem;
+            margin-top: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(0, 255, 255, 0.03);
+            border: 3px solid #00ff88;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+        }
+
+        .card h3 {
+            color: #00ffff;
+            margin-bottom: 16px;
+            font-size: 1.3rem;
+        }
+
+        .stats {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px
+        }
+
+        .stat {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            position: relative;
+            cursor: help;
+        }
+
+        .stat:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        /* ツールチップスタイル */
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 320px;
+            background-color: rgba(0, 0, 0, 0.95);
+            color: #fff;
+            text-align: left;
+            border-radius: 8px;
+            padding: 14px;
+            position: absolute;
+            z-index: 9999;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.2);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -8px;
+            border-width: 8px;
+            border-style: solid;
+            border-color: rgba(0, 0, 0, 0.95) transparent transparent transparent;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .tooltip .tooltiptext strong {
+            color: #00ffff;
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .tooltip .tooltiptext .formula {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 255, 255, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin: 6px 0;
+            font-size: 12px;
+            display: block;
+        }
+
+        .chart-area {
+            margin-top: 2px;
+            margin-bottom: 2px;
+            height: 300px;
+            text-align: center;
+            position: relative;
+        }
+
+        .chart-area img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            cursor: zoom-in;
+            transition: transform 0.2s;
+            position: relative;
+            z-index: 2;
+            pointer-events: auto;
+        }
+
+        .chart-area img:hover {
+            transform: scale(1.02);
+        }
+
+        .chart-tooltip-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chart-tooltip-wrapper .tooltiptext {
+            visibility: hidden;
+            position: absolute;
+            bottom: 8%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 280px;
+            background-color: rgba(0, 0, 0, 0.95);
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 12px;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s, visibility 0.3s;
+            border: 2px solid #00ffff;
+            pointer-events: none;
+        }
+
+        .chart-tooltip-wrapper:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .chart-tooltip-wrapper .tooltiptext strong {
+            color: #00ffff;
+            display: block;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        /* モーダルスタイル */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            overflow: auto;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-content {
+            position: relative;
+            margin: auto;
+            padding: 20px;
+            max-width: 95%;
+            max-height: 95vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 25px;
+            color: #00ffff;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+            z-index: 10000;
+        }
+
+        .modal-close:hover,
+        .modal-close:focus {
+            color: #ff00ff;
+        }
+
+        .modal-download {
+            margin-top: 20px;
+            padding: 12px 30px;
+            background: linear-gradient(45deg, #00ffff, #00ff88);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .modal-download:hover {
+            background: linear-gradient(45deg, #00ff88, #ff00ff);
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+        }
+
+        .modal-title {
+            color: #00ffff;
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .update-info {
+            text-align: center;
+            margin-top: 20px;
+            color: #00ff88;
+            font-size: 0.9rem;
+        }
+
+        .github-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #00ffff;
+            text-decoration: none;
+        }
+
+        .github-link:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 1200px) {
+            .title {
+                font-size: 2rem;
+            }
+
+            .container {
+                max-width: 95%;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .title {
+                font-size: 1.5rem;
+            }
+
+            .container {
+                padding: 15px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chart-area {
+                height: 350px;
+            }
+        }
+    </style>
+    <script>
+        // デバッグ: ページ読み込み確認
+        console.log('[Debug] HTMLファイルが読み込まれました');
+        window.addEventListener('load', function () {
+            console.log('[Debug] window.load イベント発火');
+            // ページが読み込まれたことを視覚的に確認
+            document.body.style.border = '5px solid lime';
+        });
+        window.addEventListener('error', function (e) {
+            console.error('[Debug] グローバルエラー:', e);
+        });
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">電力需要AI予測ダッシュボード</h1>
+            <p class="subtitle">GitHub Actions自動更新 | Open-Meteo API連携</p>
+            <p class="subtitle" style="margin-top: 8px; font-size: 1.0rem;">学習年: <span id="training-years"
+                    style="color: #00ff88; font-weight: bold;">2022, 2023, 2024</span></p>
+        </div>
+
+        <div class="grid">
+            <!-- Keras (左上) -->
+            <div class="card">
+                <h3>Keras予測</h3>
+                <div class="stats">
+                    <div class="stat tooltip">RMSE<br><span id="keras-rmse">-</span>
+                        <span class="tooltiptext">
+                            <strong>RMSE (Root Mean Square Error)</strong><br>
+                            予測値と実際の値の誤差の大きさを示す指標です。<br>
+                            <span class="formula">RMSE = √(Σ(予測値 - 実際値)² / n)</span><br>
+                            値が小さいほど予測精度が高いことを示します。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">R²<br><span id="keras-r2">-</span>
+                        <span class="tooltiptext">
+                            <strong>R² (決定係数)</strong><br>
+                            モデルが実際のデータをどの程度説明できるかを示します。<br>
+                            <span class="formula">R² = 1 - (残差平方和 / 全平方和)</span><br>
+                            1に近いほど予測精度が高く、0に近いほど低いです。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">MAE<br><span id="keras-mae">-</span>
+                        <span class="tooltiptext">
+                            <strong>MAE (Mean Absolute Error)</strong><br>
+                            予測値と実際の値の平均絶対誤差です。<br>
+                            <span class="formula">MAE = Σ|予測値 - 実際値| / n</span><br>
+                            外れ値の影響を受けにくい指標です。
+                        </span>
+                    </div>
+                </div>
+                <div class="chart-area">
+                    <div class="chart-tooltip-wrapper">
+                        <img src="AI/tomorrow/Keras/Keras_tomorrow.png" alt="Keras予測グラフ" class="chart-img"
+                            data-model="Keras"
+                            onerror="this.src='https://via.placeholder.com/800x450?text=Keras+Graph+Unavailable'" />
+                        <span class="tooltiptext">
+                            <strong>クリックで拡大</strong>
+                            画像を拡大表示します。モーダル内でダウンロードできます。
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LightGBM (右上) -->
+            <div class="card">
+                <h3>LightGBM予測</h3>
+                <div class="stats">
+                    <div class="stat tooltip">RMSE<br><span id="lightgbm-rmse">-</span>
+                        <span class="tooltiptext">
+                            <strong>RMSE (Root Mean Square Error)</strong><br>
+                            予測値と実際の値の誤差の大きさを示す指標です。<br>
+                            <span class="formula">RMSE = √(Σ(予測値 - 実際値)² / n)</span><br>
+                            値が小さいほど予測精度が高いことを示します。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">R²<br><span id="lightgbm-r2">-</span>
+                        <span class="tooltiptext">
+                            <strong>R² (決定係数)</strong><br>
+                            モデルが実際のデータをどの程度説明できるかを示します。<br>
+                            <span class="formula">R² = 1 - (残差平方和 / 全平方和)</span><br>
+                            1に近いほど予測精度が高く、0に近いほど低いです。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">MAE<br><span id="lightgbm-mae">-</span>
+                        <span class="tooltiptext">
+                            <strong>MAE (Mean Absolute Error)</strong><br>
+                            予測値と実際の値の平均絶対誤差です。<br>
+                            <span class="formula">MAE = Σ|予測値 - 実際値| / n</span><br>
+                            外れ値の影響を受けにくい指標です。
+                        </span>
+                    </div>
+                </div>
+                <div class="chart-area">
+                    <div class="chart-tooltip-wrapper">
+                        <img src="AI/tomorrow/LightGBM/LightGBM_tomorrow.png" alt="LightGBM予測グラフ" class="chart-img"
+                            data-model="LightGBM"
+                            onerror="this.src='https://via.placeholder.com/800x450?text=LightGBM+Graph+Unavailable'" />
+                        <span class="tooltiptext">
+                            <strong>クリックで拡大</strong>
+                            画像を拡大表示します。モーダル内でダウンロードできます。
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PyCaret (左下) -->
+            <div class="card">
+                <h3>PyCaret予測</h3>
+                <div class="stats">
+                    <div class="stat tooltip">RMSE<br><span id="pycaret-rmse">-</span>
+                        <span class="tooltiptext">
+                            <strong>RMSE (Root Mean Square Error)</strong><br>
+                            予測値と実際の値の誤差の大きさを示す指標です。<br>
+                            <span class="formula">RMSE = √(Σ(予測値 - 実際値)² / n)</span><br>
+                            値が小さいほど予測精度が高いことを示します。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">R²<br><span id="pycaret-r2">-</span>
+                        <span class="tooltiptext">
+                            <strong>R² (決定係数)</strong><br>
+                            モデルが実際のデータをどの程度説明できるかを示します。<br>
+                            <span class="formula">R² = 1 - (残差平方和 / 全平方和)</span><br>
+                            1に近いほど予測精度が高く、0に近いほど低いです。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">MAE<br><span id="pycaret-mae">-</span>
+                        <span class="tooltiptext">
+                            <strong>MAE (Mean Absolute Error)</strong><br>
+                            予測値と実際の値の平均絶対誤差です。<br>
+                            <span class="formula">MAE = Σ|予測値 - 実際値| / n</span><br>
+                            外れ値の影響を受けにくい指標です。
+                        </span>
+                    </div>
+                </div>
+                <div class="chart-area">
+                    <div class="chart-tooltip-wrapper">
+                        <img src="AI/tomorrow/Pycaret/Pycaret_tomorrow.png" alt="PyCaret予測グラフ" class="chart-img"
+                            data-model="PyCaret"
+                            onerror="this.src='https://via.placeholder.com/800x450?text=PyCaret+Graph+Unavailable'" />
+                        <span class="tooltiptext">
+                            <strong>クリックで拡大</strong>
+                            画像を拡大表示します。モーダル内でダウンロードできます。
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RandomForest (右下) -->
+            <div class="card">
+                <h3>RandomForest予測</h3>
+                <div class="stats">
+                    <div class="stat tooltip">RMSE<br><span id="rf-rmse">-</span>
+                        <span class="tooltiptext">
+                            <strong>RMSE (Root Mean Square Error)</strong><br>
+                            予測値と実際の値の誤差の大きさを示す指標です。<br>
+                            <span class="formula">RMSE = √(Σ(予測値 - 実際値)² / n)</span><br>
+                            値が小さいほど予測精度が高いことを示します。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">R²<br><span id="rf-r2">-</span>
+                        <span class="tooltiptext">
+                            <strong>R² (決定係数)</strong><br>
+                            モデルが実際のデータをどの程度説明できるかを示します。<br>
+                            <span class="formula">R² = 1 - (残差平方和 / 全平方和)</span><br>
+                            1に近いほど予測精度が高く、0に近いほど低いです。
+                        </span>
+                    </div>
+                    <div class="stat tooltip">MAE<br><span id="rf-mae">-</span>
+                        <span class="tooltiptext">
+                            <strong>MAE (Mean Absolute Error)</strong><br>
+                            予測値と実際の値の平均絶対誤差です。<br>
+                            <span class="formula">MAE = Σ|予測値 - 実際値| / n</span><br>
+                            外れ値の影響を受けにくい指標です。
+                        </span>
+                    </div>
+                </div>
+                <div class="chart-area">
+                    <div class="chart-tooltip-wrapper">
+                        <img src="AI/tomorrow/RandomForest/RandomForest_tomorrow.png" alt="RandomForest予測グラフ"
+                            class="chart-img" data-model="RandomForest"
+                            onerror="this.src='https://via.placeholder.com/800x450?text=RandomForest+Graph+Unavailable'" />
+                        <span class="tooltiptext">
+                            <strong>クリックで拡大</strong>
+                            画像を拡大表示します。モーダル内でダウンロードできます。
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="update-info">
+            最終更新: <span id="last-update">-</span> | 次回更新予定: 毎日 08:00 (日本時間)
+        </div>
+
+        <a href="https://github.com/J1921604/Power-Demand-Forecast" class="github-link" target="_blank">
+            📊 View on GitHub: Power-Demand-Forecast
+        </a>
+
+        <!-- フッター -->
+        <div
+            style="text-align: center; margin-top: 30px; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); color: #888; font-size: 0.9rem;">
+            <p>Power-Demand-Forecast v1.0.0 | リリース日: 2025-11-26</p>
+            <p style="margin-top: 10px;">
+                <a href="https://github.com/J1921604/Power-Demand-Forecast/blob/main/README.md" target="_blank"
+                    style="color: #00ffff; text-decoration: none;">📖 README</a> |
+                <a href="https://github.com/J1921604/Power-Demand-Forecast/blob/main/docs/完全仕様書.md" target="_blank"
+                    style="color: #00ffff; text-decoration: none;">📋 完全仕様書</a> |
+                <a href="https://github.com/J1921604/Power-Demand-Forecast/blob/main/docs/DEPLOY_GUIDE.md"
+                    target="_blank" style="color: #00ffff; text-decoration: none;">🚀 デプロイガイド</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- モーダルウィンドウ -->
+    <div id="imageModal" class="modal">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <div class="modal-content">
+            <h2 class="modal-title" id="modalTitle">グラフ拡大表示</h2>
+            <img id="modalImage" src="" alt="拡大グラフ">
+            <button class="modal-download" onclick="downloadImage()">📥 グラフをダウンロード</button>
+        </div>
+    </div>
+
+    <script>
+        let currentImageSrc = '';
+        let currentModelName = '';
+
+        // グラフクリックでモーダル表示
+        document.querySelectorAll('.chart-img').forEach(img => {
+            img.addEventListener('click', function () {
+                currentImageSrc = this.src;
+                currentModelName = this.dataset.model || 'AI予測';
+                document.getElementById('modalImage').src = currentImageSrc;
+                document.getElementById('modalTitle').textContent = currentModelName + ' 予測グラフ';
+                document.getElementById('imageModal').classList.add('active');
+            });
+        });
+
+        // モーダルを閉じる
+        function closeModal() {
+            document.getElementById('imageModal').classList.remove('active');
+        }
+
+        // モーダル背景クリックで閉じる
+        document.getElementById('imageModal').addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // ESCキーで閉じる
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // グラフダウンロード
+        function downloadImage() {
+            const link = document.createElement('a');
+            link.href = currentImageSrc;
+            link.download = currentModelName + '_tomorrow_' + new Date().toISOString().split('T')[0] + '.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // GitHub Actions実行時に生成されたmetrics.jsonから指標を読み込む
+        async function loadMetrics() {
+            try {
+                console.log('[Metrics] 読み込み開始...');
+                console.log('[Metrics] 現在のURL:', window.location.href);
+                const response = await fetch('AI/metrics.json?v=' + Date.now());
+                console.log('[Metrics] レスポンスステータス:', response.status);
+                if (!response.ok) {
+                    console.error('[Metrics] metrics.json読み込み失敗:', response.status, response.statusText);
+                    throw new Error('Metrics not found: ' + response.status);
+                }
+
+                const metrics = await response.json();
+                console.log('[Metrics] 読み込んだデータ:', metrics);
+
+                // 学習年を表示
+                if (metrics.training_years) {
+                    const yearsArray = metrics.training_years.split(',').map(y => y.trim());
+                    document.getElementById('training-years').textContent = yearsArray.join(', ');
+                    console.log('[Metrics] 学習年設定完了:', yearsArray);
+                }
+
+                // LightGBM
+                if (metrics.lightgbm) {
+                    document.getElementById('lightgbm-rmse').textContent = metrics.lightgbm.rmse?.toFixed(2) || 'データなし';
+                    document.getElementById('lightgbm-r2').textContent = metrics.lightgbm.r2?.toFixed(4) || 'データなし';
+                    document.getElementById('lightgbm-mae').textContent = metrics.lightgbm.mae?.toFixed(2) || 'データなし';
+                    console.log('[Metrics] LightGBM設定完了');
+                } else {
+                    document.getElementById('lightgbm-rmse').textContent = 'データなし';
+                    document.getElementById('lightgbm-r2').textContent = 'データなし';
+                    document.getElementById('lightgbm-mae').textContent = 'データなし';
+                }
+
+                // Keras
+                if (metrics.keras) {
+                    document.getElementById('keras-rmse').textContent = metrics.keras.rmse?.toFixed(2) || 'データなし';
+                    document.getElementById('keras-r2').textContent = metrics.keras.r2?.toFixed(4) || 'データなし';
+                    document.getElementById('keras-mae').textContent = metrics.keras.mae?.toFixed(2) || 'データなし';
+                } else {
+                    document.getElementById('keras-rmse').textContent = 'データなし';
+                    document.getElementById('keras-r2').textContent = 'データなし';
+                    document.getElementById('keras-mae').textContent = 'データなし';
+                }
+
+                // RandomForest
+                if (metrics.randomforest) {
+                    document.getElementById('rf-rmse').textContent = metrics.randomforest.rmse?.toFixed(2) || 'データなし';
+                    document.getElementById('rf-r2').textContent = metrics.randomforest.r2?.toFixed(4) || 'データなし';
+                    document.getElementById('rf-mae').textContent = metrics.randomforest.mae?.toFixed(2) || 'データなし';
+                } else {
+                    document.getElementById('rf-rmse').textContent = 'データなし';
+                    document.getElementById('rf-r2').textContent = 'データなし';
+                    document.getElementById('rf-mae').textContent = 'データなし';
+                }
+
+                // Pycaret
+                if (metrics.pycaret) {
+                    document.getElementById('pycaret-rmse').textContent = metrics.pycaret.rmse?.toFixed(2) || 'データなし';
+                    document.getElementById('pycaret-r2').textContent = metrics.pycaret.r2?.toFixed(4) || 'データなし';
+                    document.getElementById('pycaret-mae').textContent = metrics.pycaret.mae?.toFixed(2) || 'データなし';
+                } else {
+                    document.getElementById('pycaret-rmse').textContent = 'データなし';
+                    document.getElementById('pycaret-r2').textContent = 'データなし';
+                    document.getElementById('pycaret-mae').textContent = 'データなし';
+                }
+
+                // 更新日時
+                if (metrics.updated_at) {
+                    const date = new Date(metrics.updated_at);
+                    document.getElementById('last-update').textContent = date.toLocaleString('ja-JP');
+                } else {
+                    document.getElementById('last-update').textContent = 'データなし';
+                }
+            } catch (error) {
+                console.error('[Metrics] エラー詳細:', error);
+                console.error('[Metrics] エラースタック:', error.stack);
+                document.getElementById('last-update').textContent = 'データ読み込みエラー: ' + error.message;
+                // 全ての評価値を「読込中」に設定（エラー時も表示は維持）
+                ['lightgbm', 'keras', 'rf', 'pycaret'].forEach(model => {
+                    ['rmse', 'r2', 'mae'].forEach(metric => {
+                        const id = model === 'rf' ? `${model}-${metric}` : `${model}-${metric}`;
+                        const element = document.getElementById(id);
+                        if (element && element.textContent === '-') {
+                            element.textContent = '読込中';
+                        }
+                    });
+                });
+            }
+        }
+
+        // 初期化時にmetricsを読み込む
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('[Init] DOMContentLoaded イベント発火');
+            try {
+                loadMetrics();
+                // 5分ごとに自動更新
+                setInterval(loadMetrics, 5 * 60 * 1000);
+                console.log('[Init] loadMetrics呼び出し完了');
+            } catch (e) {
+                console.error('[Init] 初期化エラー:', e);
+            }
+        });
+
+        // ページロード後すぐに実行（DOMContentLoadedの後でも念のため）
+        if (document.readyState === 'loading') {
+            console.log('[Init] readyState=loading, DOMContentLoadedを待機');
+            document.addEventListener('DOMContentLoaded', loadMetrics);
+        } else {
+            console.log('[Init] readyState=' + document.readyState + ', 即座にloadMetrics実行');
+            loadMetrics();
+        }
+    </script>
+</body>
+
+</html>
