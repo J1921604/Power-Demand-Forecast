@@ -19,81 +19,6 @@
 
 ---
 
-## 実装スケジュール（ガントチャート）
-
-```mermaid
-gantt
-    title 電力需要予測システム 実装スケジュール（2025-12-15開始、土日・休日考慮）
-    dateFormat YYYY-MM-DD
-    axisFormat %m/%d
-    excludes weekends 2025-12-28 2025-12-29 2025-12-30 2025-12-31 2026-01-01 2026-01-02 2026-01-03
-  
-    section Phase 1: Setup
-    T001-T008 Setup Tasks             :done, p1, 2025-12-15, 2d
-    T001 プロジェクト初期化           :done, t001, 2025-12-15, 1d
-    T002 Python環境構築               :done, t002, 2025-12-15, 1d
-    T003 ディレクトリ構造作成         :done, t003, 2025-12-16, 1d
-    T004 データ収集                   :done, t004, 2025-12-16, 1d
-    T005 憲法ファイル作成             :done, t005, 2025-12-17, 1d
-    T006 テンプレート準備             :done, t006, 2025-12-17, 1d
-    T007 仕様書作成                   :done, t007, 2025-12-18, 1d
-    T008 実装計画作成                 :done, t008, 2025-12-18, 1d
-  
-    section Phase 2: Foundational
-    T009-T013 Foundational Tasks      :done, p2, after p1, 2d
-    T009 データ前処理パイプライン     :done, t009, after t008, 2d
-    T010 Open-Meteo API連携           :done, t010, after t008, 1d
-    T011 モデル訓練基盤               :done, t011, after t009, 2d
-    T012 HTTPサーバー実装             :done, t012, after t010, 1d
-    T013 ローカルストレージ永続化     :done, t013, after t012, 1d
-  
-    section Phase 3: Core Features
-    T014-T020 Core Features Tasks     :done, p3, after p2, 3d
-    T014 LightGBMモデル実装           :done, t014, after t011, 2d
-    T015 Kerasモデル実装              :done, t015, after t011, 2d
-    T016 RandomForestモデル実装       :done, t016, after t011, 2d
-    T017 PyCaretモデル実装            :done, t017, after t011, 2d
-    T018 メトリクス生成               :done, t018, after t014 t015 t016 t017, 1d
-    T019 Webダッシュボード実装        :done, t019, after t013, 3d
-    T020 ダッシュボード起動スクリプト :done, t020, after t019, 1d
-  
-    section Phase 4: Integration
-    T021-T025 Integration Tasks       :done, p4, after p3, 2d
-    T021 GitHub Actionsワークフロー   :done, t021, after t018, 2d
-    T022 CI/CDパイプライン構築        :done, t022, after t021, 2d
-    T023 R²閾値監視                   :done, t023, after t022, 1d
-    T024 GitHub Pages設定             :done, t024, after t022, 1d
-    T025 リモートブランチ管理         :done, t025, after t024, 1d
-  
-    section Phase 5: Testing
-    T026-T030 Testing Tasks           :done, p5, after p4, 2d
-    T026 単体テスト                   :done, t026, after t020, 2d
-    T027 統合テスト                   :done, t027, after t026, 2d
-    T028 契約テスト                   :done, t028, after t027, 1d
-    T029 E2Eテスト                    :done, t029, after t027, 2d
-    T030 パフォーマンステスト         :done, t030, after t029, 1d
-  
-    section Phase 6: Deployment
-    T031-T037 Deployment Tasks        :done, p6, after p5, 2d
-    T031 ドキュメント作成             :done, t031, after t023, 2d
-    T032 README更新                   :done, t032, after t031, 1d
-    T033 バージョン統一               :done, t033, after t032, 1d
-    T034 コミット規約準拠             :done, t034, after t033, 1d
-    T035 初回デプロイ                 :done, t035, after t025 t030 t034, 1d
-    T036 精度検証                     :done, t036, after t035, 1d
-    T037 ローカルプレビュー検証       :done, t037, after t036, 1d
-```
-
-**注記**:
-
-- **開始日**: 2025-12-15（土日祝日考慮）
-- 土日は除外（excludes weekends）
-- 年末年始休暇: 2025-12-28 ～ 2026-01-03
-- 開始日は相対的に調整可能（dateFormatとタスク依存関係で管理）
-- 全タスク完了済み（done）
-
----
-
 ## Phase 1: Setup（セットアップ）
 
 ### T001: プロジェクト初期化
@@ -378,3 +303,70 @@ gantt
 **実装完了日**: 2025年11月26日
 **レビュー者**: -
 **承認日**: 2025年11月26日
+
+---
+
+## 実装スケジュール（ガントチャート）
+
+```mermaid
+gantt
+    title 実装スケジュール
+    dateFormat YYYY-MM-DD
+    axisFormat %m/%d
+    excludes weekends 2025-12-27 2025-12-28 2025-12-29 2025-12-30 2025-12-31 2026-01-01 2026-01-02 2026-01-03 2026-01-04
+
+    section Phase 1: Setup
+    T001 プロジェクト初期化           :done, t001, 2025-12-15, 1d
+    T002 Python環境構築               :done, t002, after t001, 1d
+    T003 ディレクトリ構造作成         :done, t003, after t002, 1d
+    T004 データ収集                   :done, t004, after t003, 1d
+    T005 憲法ファイル作成             :done, t005, after t004, 1d
+    T006 テンプレート準備             :done, t006, after t005, 1d
+    T007 仕様書作成                   :done, t007, after t006, 1d
+    T008 実装計画作成                 :done, t008, after t007, 1d
+
+    section Phase 2: Foundational
+    T009 データ前処理パイプライン     :done, t009, after t008, 1d
+    T010 Open-Meteo API連携           :done, t010, after t009, 1d
+    T011 モデル訓練基盤               :done, t011, after t010, 1d
+    T012 HTTPサーバー実装             :done, t012, after t011, 1d
+    T013 localStorage永続化           :done, t013, after t012, 1d
+
+    section Phase 3: Core Features
+    T014 LightGBMモデル実装           :done, t014, after t013, 2d
+    T015 Kerasモデル実装              :done, t015, after t014, 2d
+    T016 RandomForestモデル実装       :done, t016, after t015, 2d
+    T017 PyCaretモデル実装            :done, t017, after t016, 2d
+    T018 メトリクス生成               :done, t018, after t017, 1d
+    T019 Webダッシュボード実装        :done, t019, after t018, 2d
+    T020 ダッシュボード起動スクリプト :done, t020, after t019, 1d
+
+    section Phase 4: Integration
+    T021 GitHub Actionsワークフロー   :done, t021, after t020, 1d
+    T022 CI/CDパイプライン構築        :done, t022, after t021, 1d
+    T023 R²閾値監視                   :done, t023, after t022, 1d
+    T024 GitHub Pages設定             :done, t024, after t023, 1d
+    T025 リモートブランチ管理         :done, t025, after t024, 1d
+
+    section Phase 5: Testing
+    T026 単体テスト                   :done, t026, after t025, 1d
+    T027 統合テスト                   :done, t027, after t026, 1d
+    T028 契約テスト                   :done, t028, after t027, 1d
+    T029 E2Eテスト                    :done, t029, after t028, 1d
+    T030 パフォーマンステスト         :done, t030, after t029, 1d
+
+    section Phase 6: Deployment
+    T031 ドキュメント作成             :done, t031, after t030, 2d
+    T032 README更新                   :done, t032, after t031, 1d
+    T033 バージョン統一               :done, t033, after t032, 1d
+    T034 コミット規約準拠             :done, t034, after t033, 1d
+    T035 初回デプロイ                 :done, t035, after t034, 1d
+    T036 精度検証                     :done, t036, after t035, 1d
+    T037 ローカルプレビュー検証       :done, t037, after t036, 1d
+```
+
+**スケジュール注記**:
+- 開始日: 2025年12月15日（月）
+- 土日・年末年始（12/27-1/4）除外
+- 相対日付方式（after 指定）により任意に開始日変更可能
+- 全タスク完了済み（done）
