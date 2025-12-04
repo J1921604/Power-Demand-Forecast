@@ -1,10 +1,10 @@
 # 実装計画書: 電力需要予測システム
 
-**機能ブランチ**: `001-Power-Demand-Forecast`  
-**仕様ブランチ**: `001-Power-Demand-Forecast`  
-**作成日**: 2025年11月26日  
-**バージョン**: 1.0.0  
-**開始予定日**: 2025年11月26日
+**機能ブランチ**: `001-Power-Demand-Forecast`
+**仕様ブランチ**: `001-Power-Demand-Forecast`
+**作成日**: 2025年11月26日
+**バージョン**: 1.0.0
+**開始予定日**: 2025年12月15日
 
 ---
 
@@ -617,53 +617,61 @@ py -3.10 -m playwright install chromium
 
 ### 2.2. タスク依存関係
 
-**開始日**: 2025年11月26日（完了済み）  
-**備考**: 以下のガントチャートは開始日を基準とした相対スケジュールです。土日・休日を考慮しています。
+**開始日**: 2025年12月15日（土日・年末年始休日考慮）
+**備考**: 以下のガントチャートは開始日を基準とした相対スケジュールです。土日・年末年始休日を考慮しています。
 
 ```mermaid
 gantt
-    title 電力需要予測システム実装スケジュール
+    title 電力需要予測システム実装スケジュール（2025-12-15開始、土日・休日考慮）
     dateFormat YYYY-MM-DD
+    excludes weekends 2025-12-28 2025-12-29 2025-12-30 2025-12-31 2026-01-01 2026-01-02 2026-01-03
     axisFormat %m/%d
-    
-    section Phase 0: リサーチ
-    研究タスク（research.md）           :done, p0, 2025-11-26, 1d
-    
+  
+    section Phase 0: Setup
+    研究タスク（research.md）           :done, p0, 2025-12-16, 1d
+  
     section Phase 1: 設計
-    データモデル設計                    :done, p1, after p0, 1d
+    データモデル設計                    :done, p1_1, after p0, 1d
     API契約定義                         :done, p1_2, after p0, 1d
     クイックスタート作成                :done, p1_3, after p1_2, 1d
-    
+  
     section Phase 2: コア機能実装
     データ前処理（data.py）             :done, p2_1, after p1_3, 1d
     LightGBM訓練                        :done, p2_2, after p1_3, 1d
-    Keras訓練                           :done, p2_3, after p2_2, 1d
-    RandomForest訓練                    :done, p2_4, after p2_2, 1d
-    PyCaret訓練                         :done, p2_5, after p2_4, 1d
-    翌日予測（LightGBM）                :done, p2_6, after p2_5, 1d
-    翌日予測（Keras/RF/PC）             :done, p2_7, after p2_6, 1d
-    
+    Keras/RF/PC訓練                     :done, p2_3, after p2_2, 1d
+    翌日予測（LightGBM）                :done, p2_4, after p2_3, 1d
+    翌日予測（Keras/RF/PC）             :done, p2_5, after p2_4, 1d
+    metrics.json生成                    :done, p2_6, after p2_5, 1d
+  
     section Phase 3: UI実装
-    HTTPサーバー（server.py）           :done, p3_1, after p2_7, 1d
-    Webダッシュボード（HTML/CSS/JS）    :done, p3_2, after p3_1, 1d
-    localStorage永続化                  :done, p3_3, after p3_1, 1d
+    HTTPサーバー（server.py）           :done, p3_1, after p2_6, 1d
+    Webダッシュボード                   :done, p3_2, after p3_1, 2d
+    localStorage永続化                  :done, p3_3, after p3_1, 2d
     組み合わせ検証UI                    :done, p3_4, after p3_3, 1d
-    
+  
     section Phase 4: CI/CD実装
     GitHub Actionsワークフロー           :done, p4_1, after p3_4, 1d
-    R²閾値チェック・Issue自動作成        :done, p4_2, after p4_1, 1d
+    R²閾値チェック                      :done, p4_2, after p4_1, 1d
     GitHub Pagesデプロイ                 :done, p4_3, after p4_2, 1d
-    
+  
     section Phase 5: テスト実装
     ユニットテスト                      :done, p5_1, after p4_3, 1d
     統合テスト                          :done, p5_2, after p4_3, 1d
-    E2Eテスト（Playwright）             :active, p5_3, after p5_2, 1d
-    パフォーマンステスト                :done, p5_4, after p5_3, 1d
-    
+    契約テスト                          :done, p5_3, after p5_2, 1d
+    E2Eテスト                           :active, p5_4, after p5_3, 1d
+    パフォーマンステスト                :done, p5_5, after p5_4, 1d
+  
     section Phase 6: ドキュメント完成
-    README.md更新                       :done, p6_1, after p5_4, 1d
+    README.md更新                       :done, p6_1, after p5_5, 1d
     完全仕様書.md更新                   :active, p6_2, after p6_1, 1d
     DEPLOY_GUIDE.md作成                 :done, p6_3, after p6_1, 1d
+    全ドキュメントブラッシュアップ      :active, p6_4, after p6_3, 1d
+  
+    section Phase 7: 最終統合
+    ローカル統合テスト                  :done, p7_1, after p6_4, 1d
+    GitHub Actions統合テスト             :p7_2, 2026-01-10, 1d
+    ブランチマージ                      :p7_3, 2026-01-10, 1d
+    最終デプロイ                        :p7_4, 2026-01-13, 1d
 ```
 
 ### 2.3. リスクと緩和策
@@ -736,6 +744,6 @@ gantt
 ---
 
 **バージョン**: 1.0.0
-**最終更新**: 2025-12-04
+**最終更新**: 2025-11-26
 **承認者**: J1921604
 **次フェーズ**: tasks.md生成、実装開始
