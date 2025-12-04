@@ -174,14 +174,16 @@
 ### ドキュメント（本機能）
 
 ```text
-specs/main/
+specs/001-Power-Demand-Forecast/
 ├── plan.md              # 本ファイル（/speckit.planコマンド出力）
+├── spec.md              # 機能仕様書
+├── requirements.md      # 要件定義書
 ├── research.md          # Phase 0出力（/speckit.planコマンド）
 ├── data-model.md        # Phase 1出力（/speckit.planコマンド）
 ├── quickstart.md        # Phase 1出力（/speckit.planコマンド）
-├── contracts/           # Phase 1出力（/speckit.planコマンド）
-│   └── open-meteo-api.yaml  # Open-Meteo API OpenAPI仕様
-└── tasks.md             # Phase 2出力（/speckit.tasksコマンド - /speckit.planでは作成しない）
+├── tasks.md             # Phase 2出力（/speckit.tasksコマンド）
+└── contracts/           # Phase 1出力（/speckit.planコマンド）
+    └── open-meteo-api.yaml  # Open-Meteo API OpenAPI仕様
 ```
 
 ### ソースコード（リポジトリルート）
@@ -244,11 +246,16 @@ Power-Demand-Forecast/
 │   ├── RELEASE_NOTES_v1.0.0.md
 │   └── TESTING_GUIDE.md
 ├── specs/
-│   ├── 001-Power-Demand-Forecast/
-│   │   ├── spec.md
-│   │   └── requirements.md
-│   └── main/
-│       └── plan.md               # 本ファイル
+│   └── 001-Power-Demand-Forecast/
+│       ├── plan.md               # 本ファイル
+│       ├── spec.md               # 機能仕様書
+│       ├── requirements.md       # 要件定義書
+│       ├── research.md           # リサーチ成果
+│       ├── data-model.md         # データモデル仕様
+│       ├── quickstart.md         # クイックスタート
+│       ├── tasks.md              # 実装タスク
+│       └── contracts/
+│           └── open-meteo-api.yaml
 ├── tests/
 │   ├── conftest.py
 │   ├── contract/
