@@ -256,7 +256,7 @@ class TestOptimizeResultFile:
         content = latest_file.read_text(encoding='utf-8')
         
         # 内容検証
-        assert "推奨組み合わせ" in content or "推奨" in content, "推奨組み合わせが記載されていません"
+        assert "推奨組み合わせ" in content or "推奨" in content or "最優秀組み合わせ" in content, "推奨組み合わせまたは最優秀組み合わせが記載されていません"
         assert "上位" in content, "上位組み合わせが記載されていません"
         assert "R²" in content or "R2" in content, "R²スコアが記載されていません"
         

@@ -1,8 +1,8 @@
 # 機能仕様書: 電力需要予測システム
 
-**機能ブランチ**: `001-power-demand-forecast-spec`  
-**作成日**: 2025-12-04  
-**ステータス**: Draft  
+**機能ブランチ**: `001-Power-Demand-Forecast`
+**作成日**: 2025-11-26
+**ステータス**: Draft
 **バージョン**: 1.0.0
 
 ---
@@ -149,43 +149,43 @@ flowchart TB
     subgraph External["外部API"]
         A1[Open-Meteo API<br/>気温データ]
     end
-    
+  
     subgraph DataLayer["データ層"]
         B1[(電力需要実績CSV<br/>juyo-2016.csv～2025.csv)]
         B2[(気温実績CSV<br/>temperature-2016.csv～2024.csv)]
         B3[tomorrow.csv<br/>過去7日+未来7日気温]
     end
-    
+  
     subgraph Processing["前処理層"]
         C1[data.py<br/>特徴量生成]
         C2[tomorrow/data.py<br/>予測用データ処理]
     end
-    
+  
     subgraph Training["訓練層"]
         D1[LightGBM<br/>勾配ブースティング]
         D2[Keras<br/>深層学習]
         D3[RandomForest<br/>アンサンブル]
         D4[PyCaret<br/>AutoML]
     end
-    
+  
     subgraph Prediction["予測層"]
         E1[tomorrow/LightGBM<br/>翌日予測]
         E2[tomorrow/Keras<br/>翌日予測]
         E3[tomorrow/RandomForest<br/>翌日予測]
         E4[tomorrow/PyCaret<br/>翌日予測]
     end
-    
+  
     subgraph Output["出力層"]
         F1[予測グラフPNG<br/>16:9比率]
         F2[予測結果CSV<br/>24時間分]
         F3[metrics.json<br/>精度指標]
     end
-    
+  
     subgraph UI["UI層"]
         G1[Webダッシュボード<br/>localhost:8002]
         G2[GitHub Pages<br/>公開サイト]
     end
-    
+  
     A1 -->|HTTP GET| B3
     B1 & B2 --> C1
     B3 --> C2
@@ -195,7 +195,7 @@ flowchart TB
     E1 & E2 & E3 & E4 --> F1 & F2 & F3
     F1 & F2 & F3 --> G1
     F1 & F2 & F3 --> G2
-    
+  
     style A1 fill:#ffccbc
     style C1 fill:#c8e6c9
     style D1 fill:#bbdefb
@@ -213,7 +213,7 @@ flowchart LR
         A2[Push<br/>main]
         A3[手動実行]
     end
-    
+  
     subgraph CI["Continuous Integration"]
         B1[気温データ取得<br/>Open-Meteo API]
         B2[データ処理<br/>data.py]
@@ -221,17 +221,17 @@ flowchart LR
         B4[4モデル予測<br/>並列実行]
         B5[精度チェック<br/>R²≥0.80]
     end
-    
+  
     subgraph CD["Continuous Deployment"]
         C1[metrics.json<br/>生成]
         C2[GitHub Pages<br/>デプロイ]
         C3[予測結果<br/>コミット]
     end
-    
+  
     subgraph Alert["アラート"]
         D1[GitHub Issue<br/>自動作成]
     end
-    
+  
     A1 & A2 & A3 --> B1
     B1 --> B2
     B2 --> B3
@@ -241,7 +241,7 @@ flowchart LR
     B5 -->|R²<0.80| D1
     C1 --> C2
     C2 --> C3
-    
+  
     style A1 fill:#e3f2fd
     style B3 fill:#c8e6c9
     style C2 fill:#fff9c4
@@ -347,15 +347,15 @@ flowchart LR
 
 ## リスクと対策
 
-| リスク                         | 影響度 | 対策                                                   |
-| ------------------------------ | ------ | ------------------------------------------------------ |
-| Open-Meteo API接続失敗         | 高     | 3回リトライ実装、失敗時はワークフロー失敗として通知   |
-| 予測精度低下（R²<0.80）        | 高     | GitHub Issue自動作成、学習データ確認・再調整を推奨    |
-| GitHub Actions無料枠超過       | 中     | ワークフロー実行時間を10分以内に最適化                 |
-| 学習済みモデルファイルサイズ超 | 中     | モデル圧縮、または外部ストレージ（GitHub LFS）検討     |
-| localStorageデータ破損         | 低     | デフォルト値（2022,2023,2024）で自動復元               |
+| リスク                         | 影響度 | 対策                                                |
+| ------------------------------ | ------ | --------------------------------------------------- |
+| Open-Meteo API接続失敗         | 高     | 3回リトライ実装、失敗時はワークフロー失敗として通知 |
+| 予測精度低下（R²<0.80）       | 高     | GitHub Issue自動作成、学習データ確認・再調整を推奨  |
+| GitHub Actions無料枠超過       | 中     | ワークフロー実行時間を10分以内に最適化              |
+| 学習済みモデルファイルサイズ超 | 中     | モデル圧縮、または外部ストレージ（GitHub LFS）検討  |
+| localStorageデータ破損         | 低     | デフォルト値（2022,2023,2024）で自動復元            |
 
 ---
 
-**バージョン**: 1.0.0  
+**バージョン**: 1.0.0
 **最終更新**: 2025-12-04
