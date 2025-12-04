@@ -1,15 +1,9 @@
 ﻿コミットメッセージは Conventional Commits 規約に準拠すること。
-
 ## フォーマット
-
 <type>[optional scope]: <description>
-
 [optional body]
-
 [optional footer(s)]
-
 ## Type
-
 - eat: 新機能の追加
 - ix: バグ修正
 - docs: ドキュメントのみの変更
@@ -21,14 +15,9 @@
 - ci: CI設定ファイルやスクリプトの変更
 - chore: その他の変更(src や test ファイルを変更しないもの)
 - evert: 以前のコミットを取り消す
-
 ## 基本ルール
-
 - descriptionは日本語で50文字以内とすること。
 - 破壊的な変更の場合は、!をtypeの後に追加すること。
-
 ## 例
-
 feat: ユーザー認証機能を追加
-
 JWTベースの認証システムをリフレッシュトークン付きで実装。
