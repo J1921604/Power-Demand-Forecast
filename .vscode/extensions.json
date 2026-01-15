@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-toolsai.jupyter",
+    "ms-toolsai.jupyter-keymap",
+    "ms-toolsai.jupyter-renderers",
+    "ms-python.debugpy",
+    "ms-vscode.powershell",
+    "yzhang.markdown-all-in-one",
+    "bierner.markdown-mermaid",
+    "redhat.vscode-yaml"
+  ]
+}

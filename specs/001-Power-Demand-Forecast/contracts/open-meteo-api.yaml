@@ -1,0 +1,273 @@
+openapi: 3.0.3
+info:
+  title: Open-Meteo Weather Forecast API
+  description: |
+    Open-Meteo APIは、無料で使用できる気象予報APIです。
+    本プロジェクトでは、過去7日間+未来7日間の気温データを取得し、
+    電力需要予測の特徴量として使用します。
+    
+    **公式ドキュメント**: https://open-meteo.com/
+    **API制限**: 60リクエスト/分（無料枠）
+    **認証**: 不要（APIキー不要）
+  version: "1.0"
+  contact:
+    name: Open-Meteo
+    url: https://open-meteo.com/
+  license:
+    name: CC BY 4.0
+    url: https://creativecommons.org/licenses/by/4.0/
+
+servers:
+  - url: https://api.open-meteo.com/v1
+    description: Production server
+
+paths:
+  /forecast:
+    get:
+      summary: Get weather forecast data
+      description: |
+        過去および未来の気象データを取得します。
+        本プロジェクトでは`temperature_2m`（2m高度の気温）のみを使用します。
+      operationId: getForecast
+      tags:
+        - Forecast
+      parameters:
+        - name: latitude
+          in: query
+          required: true
+          description: "緯度 (東京: 35.6785)"
+          schema:
+            type: number
+            format: float
+            example: 35.6785
+            
+        - name: longitude
+          in: query
+          required: true
+          description: "経度 (東京: 139.6823)"
+          schema:
+            type: number
+            format: float
+            example: 139.6823
+            
+        - name: hourly
+          in: query
+          required: true
+          description: 時間単位で取得するデータ項目（カンマ区切り）
+          schema:
+            type: string
+            example: temperature_2m
+            enum:
+              - temperature_2m
+              - relative_humidity_2m
+              - precipitation
+              - weathercode
+              
+        - name: timezone
+          in: query
+          required: false
+          description: "タイムゾーン (デフォルト: UTC)"
+          schema:
+            type: string
+            example: Asia/Tokyo
+            default: UTC
+            
+        - name: past_days
+          in: query
+          required: false
+          description: 過去何日分のデータを取得するか（0-92日）
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 92
+            default: 0
+            example: 7
+            
+        - name: forecast_days
+          in: query
+          required: false
+          description: 未来何日分の予測データを取得するか（0-16日）
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 16
+            default: 7
+            example: 7
+
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - latitude
+                  - longitude
+                  - hourly
+                properties:
+                  latitude:
+                    type: number
+                    format: float
+                    description: リクエストした緯度
+                    example: 35.6785
+                    
+                  longitude:
+                    type: number
+                    format: float
+                    description: リクエストした経度
+                    example: 139.6823
+                    
+                  generationtime_ms:
+                    type: number
+                    format: float
+                    description: レスポンス生成時間（ミリ秒）
+                    example: 0.5
+                    
+                  utc_offset_seconds:
+                    type: integer
+                    description: UTCオフセット（秒）
+                    example: 32400
+                    
+                  timezone:
+                    type: string
+                    description: タイムゾーン
+                    example: Asia/Tokyo
+                    
+                  timezone_abbreviation:
+                    type: string
+                    description: タイムゾーン略称
+                    example: JST
+                    
+                  elevation:
+                    type: number
+                    format: float
+                    description: 標高（メートル）
+                    example: 40.0
+                    
+                  hourly_units:
+                    type: object
+                    description: 各データ項目の単位
+                    properties:
+                      time:
+                        type: string
+                        example: iso8601
+                      temperature_2m:
+                        type: string
+                        example: °C
+                        
+                  hourly:
+                    type: object
+                    description: 時間単位の気象データ
+                    required:
+                      - time
+                      - temperature_2m
+                    properties:
+                      time:
+                        type: array
+                        description: 日時配列（ISO 8601形式）
+                        items:
+                          type: string
+                          format: date-time
+                          example: "2025-12-01T00:00"
+                          
+                      temperature_2m:
+                        type: array
+                        description: 2m高度の気温配列（℃）
+                        items:
+                          type: number
+                          format: float
+                          example: 12.5
+                          
+              examples:
+                example1:
+                  summary: 東京の過去7日+未来7日の気温データ
+                  value:
+                    latitude: 35.6785
+                    longitude: 139.6823
+                    generationtime_ms: 0.5
+                    utc_offset_seconds: 32400
+                    timezone: Asia/Tokyo
+                    timezone_abbreviation: JST
+                    elevation: 40.0
+                    hourly_units:
+                      time: iso8601
+                      temperature_2m: °C
+                    hourly:
+                      time:
+                        - "2025-11-24T00:00"
+                        - "2025-11-24T01:00"
+                        - "2025-11-24T02:00"
+                      temperature_2m:
+                        - 12.5
+                        - 12.3
+                        - 12.0
+                        
+        '400':
+          description: Bad Request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: boolean
+                    example: true
+                  reason:
+                    type: string
+                    example: "Invalid latitude"
+                    
+        '429':
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: boolean
+                    example: true
+                  reason:
+                    type: string
+                    example: "Rate limit exceeded. Max 60 requests per minute."
+
+components:
+  schemas:
+    ForecastResponse:
+      type: object
+      description: 気象予報APIレスポンス
+      required:
+        - latitude
+        - longitude
+        - hourly
+      properties:
+        latitude:
+          type: number
+          format: float
+        longitude:
+          type: number
+          format: float
+        hourly:
+          $ref: '#/components/schemas/HourlyData'
+          
+    HourlyData:
+      type: object
+      description: 時間単位の気象データ
+      required:
+        - time
+        - temperature_2m
+      properties:
+        time:
+          type: array
+          items:
+            type: string
+            format: date-time
+        temperature_2m:
+          type: array
+          items:
+            type: number
+            format: float
+
+tags:
+  - name: Forecast
+    description: Weather forecast operations
