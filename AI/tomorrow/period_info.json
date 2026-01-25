@@ -1,6 +1,6 @@
 {
-  "start_datetime": "2026-01-18 00:00:00",
-  "end_datetime": "2026-01-24 23:00:00",
+  "start_datetime": "2026-01-19 00:00:00",
+  "end_datetime": "2026-01-25 23:00:00",
   "past_days": 7,
   "forecast_days": 7,
   "target_hours": 168
