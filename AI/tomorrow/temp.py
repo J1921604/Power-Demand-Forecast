@@ -136,32 +136,39 @@ def monitor_memory_usage(func_name: str) -> None:
 
 @lru_cache(maxsize=128)
 def cached_url_generation(
-    latitude: str, 
-    longitude: str, 
-    timezone: str, 
-    past_days: int, 
-    forecast_days: int
+    latitude: str,
+    longitude: str,
+    timezone: str,
+    past_days: int,
+    forecast_days: int,
+    start_date: str,
+    end_date: str
 ) -> str:
     """
     APIURLキャッシュ生成（パフォーマンス最適化）
-    
+
     Args:
         latitude: 緯度
-        longitude: 経度  
+        longitude: 経度
         timezone: タイムゾーン
         past_days: 過去日数
         forecast_days: 予測日数
-        
+        start_date: 開始日（YYYY-MM-DD、未指定なら空文字）
+        end_date: 終了日（YYYY-MM-DD、未指定なら空文字）
+
     Returns:
         str: キャッシュされたAPIURL
     """
-    return (f"{config.OPEN_METEO_BASE_URL}"
+    base = (f"{config.OPEN_METEO_BASE_URL}"
             f"?latitude={latitude}"
             f"&longitude={longitude}"
             f"&hourly=temperature_2m"
-            f"&timezone={timezone}"
-            f"&past_days={past_days}"
-            f"&forecast_days={forecast_days}")
+            f"&timezone={timezone}")
+
+    if start_date and end_date:
+        return f"{base}&start_date={start_date}&end_date={end_date}"
+
+    return f"{base}&past_days={past_days}&forecast_days={forecast_days}"
 
 def safe_api_operation(operation: str):
     """
@@ -204,11 +211,13 @@ def safe_api_operation(operation: str):
     return decorator
 
 def generate_api_url(
-    latitude: str, 
-    longitude: str, 
-    timezone: str, 
-    past_days: Union[str, int], 
-    forecast_days: Union[str, int]
+    latitude: str,
+    longitude: str,
+    timezone: str,
+    past_days: Union[str, int],
+    forecast_days: Union[str, int],
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
 ) -> str:
     """
     Open-Meteo APIのURL生成（キャッシュ対応）
@@ -224,18 +233,27 @@ def generate_api_url(
         str: 生成されたAPIURL
     """
     # キャッシュ関数を使用してパフォーマンス向上
+    start_date_str = start_date or ""
+    end_date_str = end_date or ""
     return cached_url_generation(
-        latitude, longitude, timezone, 
-        int(past_days), int(forecast_days)
+        latitude,
+        longitude,
+        timezone,
+        int(past_days),
+        int(forecast_days),
+        start_date_str,
+        end_date_str
     )
 
 @safe_api_operation("気温データAPI取得")
 def fetch_temperature_data(
-    latitude: str, 
-    longitude: str, 
-    timezone: str, 
-    past_days: Union[str, int], 
-    forecast_days: Union[str, int]
+    latitude: str,
+    longitude: str,
+    timezone: str,
+    past_days: Union[str, int],
+    forecast_days: Union[str, int],
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Open-Meteo APIから気温データを取得（セッション最適化版）
@@ -255,7 +273,7 @@ def fetch_temperature_data(
         ValueError: APIレスポンス検証エラー
     """
     # APIエンドポイントURL生成（キャッシュ利用）
-    api_url = generate_api_url(latitude, longitude, timezone, past_days, forecast_days)
+    api_url = generate_api_url(latitude, longitude, timezone, past_days, forecast_days, start_date, end_date)
     logger.info(f"API Request URL: {api_url}")
     
     # セッション使用による最適化APIリクエスト実行
@@ -274,7 +292,7 @@ def fetch_temperature_data(
     
     return data
 
-def create_temperature_dataframe(api_data: Dict[str, Any]) -> pd.DataFrame:
+def create_temperature_dataframe(api_data: Dict[str, Any], include_time: bool = False) -> pd.DataFrame:
     """
     APIデータから機械学習用気温データフレーム作成（メモリ最適化版）
     
@@ -313,7 +331,10 @@ def create_temperature_dataframe(api_data: Dict[str, Any]) -> pd.DataFrame:
         df['TEMP'] = df['TEMP'].astype(config.FLOAT_PRECISION)  # メモリ効率化
         
         # 必要なカラムのみ選択（メモリ削減）
-        result_df = df[config.REQUIRED_COLUMNS].copy()
+        if include_time:
+            result_df = df[['time'] + config.REQUIRED_COLUMNS].copy()
+        else:
+            result_df = df[config.REQUIRED_COLUMNS].copy()
         
         # 不要なオブジェクトを即座に削除
         del df
@@ -374,12 +395,35 @@ def save_temperature_csv(df: pd.DataFrame, output_path: str) -> None:
         traceback.print_exc()
         raise IOError(error_msg)
 
+def load_latest_anchor_datetime(marker_path: str) -> Optional[dt.datetime]:
+    """
+    最新データ日時マーカーを読み込む
+
+    Args:
+        marker_path: 最新日時マーカーファイルパス
+
+    Returns:
+        Optional[dt.datetime]: 取得できた場合は日時、失敗時はNone
+    """
+    try:
+        if not os.path.exists(marker_path):
+            return None
+        with open(marker_path, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+        if not raw:
+            return None
+        return dt.datetime.fromisoformat(raw)
+    except Exception as e:
+        logger.warning(f"最新データ日時マーカー読込失敗: {e}")
+        return None
+
+
 def temp(
-    latitude: str, 
-    longitude: str, 
-    timezone: str, 
-    Xtomorrow_csv: str, 
-    past_days: Union[str, int], 
+    latitude: str,
+    longitude: str,
+    timezone: str,
+    Xtomorrow_csv: str,
+    past_days: Union[str, int],
     forecast_days: Union[str, int]
 ) -> Optional[str]:
     """
@@ -404,11 +448,53 @@ def temp(
         monitor_memory_usage("temp関数開始")
         logger.info("気温データ取得処理開始")
         
+        # 最新データ日時に合わせた時間窓を優先（存在しない場合は従来方式）
+        marker_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "latest_datetime.txt")
+        anchor_dt = load_latest_anchor_datetime(marker_path)
+        start_date = None
+        end_date = None
+        if anchor_dt is not None:
+            anchor_date = anchor_dt.date()
+            past_days_int = int(past_days)
+            forecast_days_int = int(forecast_days)
+            # アンカー時刻(例: 23:00)を含む過去7日分を確保するため、1日分余裕を持たせる
+            start_date = (anchor_date - dt.timedelta(days=past_days_int)).strftime("%Y-%m-%d")
+            end_date = (anchor_date + dt.timedelta(days=forecast_days_int)).strftime("%Y-%m-%d")
+            logger.info(f"最新データ日時に合わせて取得範囲を固定: {start_date} 〜 {end_date}")
+        else:
+            logger.info("最新データ日時マーカーなし - 既定のpast_days/forecast_daysを使用")
+
         # APIから気温データ取得
-        api_data = fetch_temperature_data(latitude, longitude, timezone, past_days, forecast_days)
+        api_data = fetch_temperature_data(latitude, longitude, timezone, past_days, forecast_days, start_date, end_date)
         
         # データフレーム作成
-        temperature_df = create_temperature_dataframe(api_data)
+        temperature_df = create_temperature_dataframe(api_data, include_time=(anchor_dt is not None))
+        try:
+            if 'time' in temperature_df.columns:
+                logger.info(f"気温データ範囲: {temperature_df['time'].min()} 〜 {temperature_df['time'].max()}")
+        except Exception:
+            pass
+
+        # アンカーがある場合は時間窓でフィルタリング
+        if anchor_dt is not None:
+            past_days_int = int(past_days)
+            forecast_days_int = int(forecast_days)
+            expected_rows = (past_days_int + forecast_days_int) * 24
+            start_dt = anchor_dt - dt.timedelta(hours=past_days_int * 24 - 1)
+            end_dt = anchor_dt + dt.timedelta(hours=forecast_days_int * 24)
+            filtered = temperature_df[(temperature_df['time'] >= start_dt) & (temperature_df['time'] <= end_dt)]
+            if len(filtered) == expected_rows:
+                temperature_df = filtered
+                logger.info(f"時間窓フィルタ適用: {start_dt} 〜 {end_dt} ({len(temperature_df)}行)")
+            elif len(filtered) > expected_rows:
+                temperature_df = filtered.tail(expected_rows)
+                logger.warning(f"時間窓フィルタで行数過多のため末尾{expected_rows}行を使用: 実際={len(filtered)}行")
+            else:
+                logger.warning(f"時間窓フィルタの行数不足 ({len(filtered)}/{expected_rows}) - 元データを維持します")
+
+        # time列がある場合は保存前に除去
+        if 'time' in temperature_df.columns:
+            temperature_df = temperature_df[config.REQUIRED_COLUMNS].copy()
         
         # CSV保存
         save_temperature_csv(temperature_df, Xtomorrow_csv)
@@ -445,7 +531,8 @@ def main() -> None:
         latitude = config.DEFAULT_LATITUDE
         longitude = config.DEFAULT_LONGITUDE
         timezone = config.DEFAULT_TIMEZONE
-        output_csv = "tomorrow/tomorrow.csv"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_csv = os.path.join(script_dir, "tomorrow.csv")
         past_days = config.DEFAULT_PAST_DAYS
         forecast_days = config.DEFAULT_FORECAST_DAYS
         

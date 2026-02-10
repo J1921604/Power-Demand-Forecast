@@ -116,6 +116,24 @@ def generate_target_path(year: int) -> str:
     data_dir = os.path.join(ai_dir, "data")
     return os.path.join(data_dir, f"juyo-{year}.csv")
 
+def write_latest_datetime_marker(latest_data_datetime: dt.datetime, ytest_csv: str) -> None:
+    """
+    最新の電力データ日時をマーカーとして保存する
+
+    Args:
+        latest_data_datetime: 最新データの日時
+        ytest_csv: Ytest.csv の出力パス（同一ディレクトリに保存）
+    """
+    try:
+        marker_dir = os.path.dirname(os.path.abspath(ytest_csv))
+        os.makedirs(marker_dir, exist_ok=True)
+        marker_path = os.path.join(marker_dir, "latest_datetime.txt")
+        with open(marker_path, "w", encoding="utf-8") as f:
+            f.write(latest_data_datetime.isoformat())
+        logger.info(f"最新データ日時マーカー保存完了: {marker_path} ({latest_data_datetime.isoformat()})")
+    except Exception as e:
+        logger.warning(f"最新データ日時マーカーの保存に失敗しました: {e}")
+
 def monitor_memory_usage(func):
     """
     メモリ使用量監視デコレータ（最適化版）
@@ -534,6 +552,10 @@ def download_and_extract_latest_data(
     for col in combined_df.columns:
         combined_df[col] = combined_df[col].astype(str).str.replace('\r', '')
 
+    # 日付・時刻で昇順ソート（AI_vmの並びに合わせる）
+    if 'DATE' in combined_df.columns and 'TIME' in combined_df.columns:
+        combined_df = combined_df.sort_values(['DATE', 'TIME']).reset_index(drop=True)
+
     # クリーンアップしたデータをCSVに保存
     try:
         # データフレームを文字列バッファに書き込み
@@ -602,6 +624,12 @@ def create_tomorrow_prediction_dataset(
         # 日時カラムをインデックスに設定
         df.set_index('DATETIME_COMBINED', inplace=True)
 
+        # 重複日時を除去（最新データ優先）
+        if df.index.has_duplicates:
+            before_len = len(df)
+            df = df[~df.index.duplicated(keep='last')]
+            logger.info(f"重複日時を除去しました: {before_len} → {len(df)}")
+
         # 時系列特徴量追加
         df["MONTH"] = df.index.month
         df["WEEK"] = df.index.weekday
@@ -654,6 +682,9 @@ def process_temperature_and_create_dataset(
         past_days_int = int(past_days)
         latest_data_datetime = df_kw.index.max()
         print(f"電力データの最新日時: {latest_data_datetime}")
+
+        # 最新日時マーカーを保存（気温データの時間窓合わせに使用）
+        write_latest_datetime_marker(latest_data_datetime, Ytest_csv)
 
         # 過去指定日数分のデータを抽出
         # 最新データから過去past_days日分（168時間）を取得
@@ -718,8 +749,7 @@ def main() -> None:
         
         # ファイルパス設定（絶対パス解決）
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        tomorrow_dir = os.path.join(script_dir, "tomorrow")
-        Ytest_csv = os.path.join(tomorrow_dir, "Ytest.csv")
+        Ytest_csv = os.path.join(script_dir, "Ytest.csv")
         past_days = '7'
         forecast_days = '7'
         past_days = '7'

@@ -53,22 +53,29 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class LightGBMTomorrowConfig:
     """LightGBM翌日予測設定クラス"""
+    # パス基準（AIディレクトリ）
+    PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    DATA_DIR: str = os.path.join(PROJECT_ROOT, "data")
+    TOMORROW_DIR: str = os.path.join(PROJECT_ROOT, "tomorrow")
+    TRAIN_DIR: str = os.path.join(PROJECT_ROOT, "train", "LightGBM")
+    TOMORROW_MODEL_DIR: str = os.path.join(TOMORROW_DIR, "LightGBM")
+
     # 入力データ関連
-    XTRAIN_CSV: str = r"data/Xtrain.csv"
-    XTEST_CSV: str = r"data/Xtest.csv"
-    YTRAIN_CSV: str = r"data/Ytrain.csv"
-    YTEST_CSV: str = r"tomorrow/Ytest.csv"
-    XTOMORROW_CSV: str = r"tomorrow/tomorrow.csv"
+    XTRAIN_CSV: str = os.path.join(DATA_DIR, "Xtrain.csv")
+    XTEST_CSV: str = os.path.join(DATA_DIR, "Xtest.csv")
+    YTRAIN_CSV: str = os.path.join(DATA_DIR, "Ytrain.csv")
+    YTEST_CSV: str = os.path.join(TOMORROW_DIR, "Ytest.csv")
+    XTOMORROW_CSV: str = os.path.join(TOMORROW_DIR, "tomorrow.csv")
     
     # モデル関連
-    MODEL_SAV: str = r'train/LightGBM/LightGBM_model.sav'
+    MODEL_SAV: str = os.path.join(TRAIN_DIR, "LightGBM_model.sav")
     
     # 出力関連
-    YPRED_CSV: str = r'tomorrow/LightGBM/LightGBM_Ypred.csv'
-    YPRED_PNG: str = r'tomorrow/LightGBM/LightGBM_Ypred.png'
-    YPRED_7D_PNG: str = r'tomorrow/LightGBM/LightGBM_Ypred_7d.png'
-    YTOMORROW_CSV: str = r'tomorrow/LightGBM/LightGBM_tomorrow.csv'
-    YTOMORROW_PNG: str = r'tomorrow/LightGBM/LightGBM_tomorrow.png'
+    YPRED_CSV: str = os.path.join(TOMORROW_MODEL_DIR, "LightGBM_Ypred.csv")
+    YPRED_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "LightGBM_Ypred.png")
+    YPRED_7D_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "LightGBM_Ypred_7d.png")
+    YTOMORROW_CSV: str = os.path.join(TOMORROW_MODEL_DIR, "LightGBM_tomorrow.csv")
+    YTOMORROW_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "LightGBM_tomorrow.png")
     
     # 設定パラメータ
     PAST_DAYS: str = '7'
@@ -117,10 +124,23 @@ def robust_model_operation(operation_name: str):
 def load_training_data(config: LightGBMTomorrowConfig) -> Tuple[pd.DataFrame, StandardScaler]:
     """学習データを読み込み、標準化スケーラーを作成"""
     X_train = pd.read_csv(config.XTRAIN_CSV)
-    
-    # 標準化スケーラーを作成・学習
-    scaler = StandardScaler()
-    scaler.fit(X_train)
+
+    # 学習時に保存したスケーラーがあれば優先して使用
+    scaler_path = config.MODEL_SAV.replace('.sav', '_scaler.pkl')
+    if os.path.exists(scaler_path):
+        try:
+            with open(scaler_path, 'rb') as f:
+                scaler = pickle.load(f)
+            print(f"スケーラー読み込み完了: {scaler_path}")
+        except Exception as e:
+            print(f"スケーラー読み込み失敗: {e} - 再学習を実施します")
+            scaler = StandardScaler()
+            scaler.fit(X_train)
+    else:
+        # 標準化スケーラーを作成・学習
+        scaler = StandardScaler()
+        scaler.fit(X_train)
+
     X_train_scaled = pd.DataFrame(scaler.transform(X_train), columns=X_train.columns)
     
     print(f"学習データ形状: {X_train_scaled.shape}")

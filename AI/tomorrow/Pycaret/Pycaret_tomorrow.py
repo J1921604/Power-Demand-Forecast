@@ -38,22 +38,29 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class PycaretTomorrowConfig:
     """Pycaret翌日予測設定クラス"""
+    # パス基準（AIディレクトリ）
+    PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    DATA_DIR: str = os.path.join(PROJECT_ROOT, "data")
+    TOMORROW_DIR: str = os.path.join(PROJECT_ROOT, "tomorrow")
+    TRAIN_DIR: str = os.path.join(PROJECT_ROOT, "train", "Pycaret")
+    TOMORROW_MODEL_DIR: str = os.path.join(TOMORROW_DIR, "Pycaret")
+
     # 入力データ関連
-    XTRAIN_CSV: str = r"data/Xtrain.csv"
-    XTEST_CSV: str = r"data/Xtest.csv"
-    YTRAIN_CSV: str = r"data/Ytrain.csv"
-    YTEST_CSV: str = r"tomorrow/Ytest.csv"
-    XTOMORROW_CSV: str = r"tomorrow/tomorrow.csv"
+    XTRAIN_CSV: str = os.path.join(DATA_DIR, "Xtrain.csv")
+    XTEST_CSV: str = os.path.join(DATA_DIR, "Xtest.csv")
+    YTRAIN_CSV: str = os.path.join(DATA_DIR, "Ytrain.csv")
+    YTEST_CSV: str = os.path.join(TOMORROW_DIR, "Ytest.csv")
+    XTOMORROW_CSV: str = os.path.join(TOMORROW_DIR, "tomorrow.csv")
     
     # モデル関連
-    MODEL_SAV: str = r'train/Pycaret/Pycaret_model'
+    MODEL_SAV: str = os.path.join(TRAIN_DIR, "Pycaret_model")
     
     # 出力関連
-    YPRED_CSV: str = r'tomorrow/Pycaret/Pycaret_Ypred.csv'
-    YPRED_PNG: str = r'tomorrow/Pycaret/Pycaret_Ypred.png'
-    YPRED_7D_PNG: str = r'tomorrow/Pycaret/Pycaret_Ypred_7d.png'
-    YTOMORROW_CSV: str = r'tomorrow/Pycaret/Pycaret_tomorrow.csv'
-    YTOMORROW_PNG: str = r'tomorrow/Pycaret/Pycaret_tomorrow.png'
+    YPRED_CSV: str = os.path.join(TOMORROW_MODEL_DIR, "Pycaret_Ypred.csv")
+    YPRED_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "Pycaret_Ypred.png")
+    YPRED_7D_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "Pycaret_Ypred_7d.png")
+    YTOMORROW_CSV: str = os.path.join(TOMORROW_MODEL_DIR, "Pycaret_tomorrow.csv")
+    YTOMORROW_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "Pycaret_tomorrow.png")
     
     # 設定パラメータ
     PAST_DAYS: int = 7

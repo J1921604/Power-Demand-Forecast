@@ -60,11 +60,11 @@ class RandomForestConfig:
     data_dtype: str = 'float32'
     
     # RandomForest モデル設定
-    n_estimators: int = 100
-    max_depth: Optional[int] = None
+    n_estimators: int = 150
+    max_depth: Optional[int] = 20
     min_samples_split: int = 2
-    min_samples_leaf: int = 1
-    max_features: str = 'sqrt'
+    min_samples_leaf: int = 2
+    max_features: float = 1.0
     n_jobs: int = -1  # すべてのCPUコアを使用（パフォーマンス最適化）
     random_state: int = 42
     

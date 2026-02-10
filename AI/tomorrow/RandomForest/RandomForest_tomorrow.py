@@ -39,22 +39,29 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class RandomForestTomorrowConfig:
     """RandomForest翌日予測設定クラス"""
+    # パス基準（AIディレクトリ）
+    PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    DATA_DIR: str = os.path.join(PROJECT_ROOT, "data")
+    TOMORROW_DIR: str = os.path.join(PROJECT_ROOT, "tomorrow")
+    TRAIN_DIR: str = os.path.join(PROJECT_ROOT, "train", "RandomForest")
+    TOMORROW_MODEL_DIR: str = os.path.join(TOMORROW_DIR, "RandomForest")
+
     # 入力データ関連
-    XTRAIN_CSV: str = r"data/Xtrain.csv"
-    XTEST_CSV: str = r"data/Xtest.csv"
-    YTRAIN_CSV: str = r"data/Ytrain.csv"
-    YTEST_CSV: str = r"tomorrow/Ytest.csv"
-    XTOMORROW_CSV: str = r"tomorrow/tomorrow.csv"
+    XTRAIN_CSV: str = os.path.join(DATA_DIR, "Xtrain.csv")
+    XTEST_CSV: str = os.path.join(DATA_DIR, "Xtest.csv")
+    YTRAIN_CSV: str = os.path.join(DATA_DIR, "Ytrain.csv")
+    YTEST_CSV: str = os.path.join(TOMORROW_DIR, "Ytest.csv")
+    XTOMORROW_CSV: str = os.path.join(TOMORROW_DIR, "tomorrow.csv")
     
     # モデル関連
-    MODEL_SAV: str = r'train/RandomForest/RandomForest_model.sav'
+    MODEL_SAV: str = os.path.join(TRAIN_DIR, "RandomForest_model.sav")
     
     # 出力関連
-    YPRED_CSV: str = r'tomorrow/RandomForest/RandomForest_Ypred.csv'
-    YPRED_PNG: str = r'tomorrow/RandomForest/RandomForest_Ypred.png'
-    YPRED_7D_PNG: str = r'tomorrow/RandomForest/RandomForest_Ypred_7d.png'
-    YTOMORROW_CSV: str = r'tomorrow/RandomForest/RandomForest_tomorrow.csv'
-    YTOMORROW_PNG: str = r'tomorrow/RandomForest/RandomForest_tomorrow.png'
+    YPRED_CSV: str = os.path.join(TOMORROW_MODEL_DIR, "RandomForest_Ypred.csv")
+    YPRED_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "RandomForest_Ypred.png")
+    YPRED_7D_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "RandomForest_Ypred_7d.png")
+    YTOMORROW_CSV: str = os.path.join(TOMORROW_MODEL_DIR, "RandomForest_tomorrow.csv")
+    YTOMORROW_PNG: str = os.path.join(TOMORROW_MODEL_DIR, "RandomForest_tomorrow.png")
     
     # 設定パラメータ
     PAST_DAYS: int = 7
@@ -118,10 +125,25 @@ def load_training_and_test_data(config: RandomForestTomorrowConfig) -> Tuple[np.
     return x_train, y_test, x_tomorrow
 
 @robust_model_operation("データ標準化")
-def standardize_data(x_train: np.ndarray, x_tomorrow: np.ndarray) -> Tuple[np.ndarray, np.ndarray, StandardScaler]:
+def standardize_data(config: RandomForestTomorrowConfig, x_train: np.ndarray, x_tomorrow: np.ndarray) -> Tuple[np.ndarray, np.ndarray, StandardScaler]:
     """データの標準化を実行"""
-    scaler = StandardScaler()
-    x_train_scaled = scaler.fit_transform(x_train)
+    scaler_path = config.MODEL_SAV.replace('.sav', '_scaler.pkl')
+    scaler = None
+    if os.path.exists(scaler_path):
+        try:
+            with open(scaler_path, 'rb') as f:
+                scaler = pickle.load(f)
+            print(f"スケーラー読み込み完了: {scaler_path}")
+        except Exception as e:
+            print(f"スケーラー読み込み失敗: {e} - 再学習を実施します")
+            scaler = None
+
+    if scaler is None:
+        scaler = StandardScaler()
+        x_train_scaled = scaler.fit_transform(x_train)
+    else:
+        x_train_scaled = scaler.transform(x_train)
+
     x_tomorrow_scaled = scaler.transform(x_tomorrow)
     
     print(f"データ標準化完了 - 学習データ: {x_train_scaled.shape}, 翌日データ: {x_tomorrow_scaled.shape}")
@@ -294,7 +316,7 @@ def execute_tomorrow_prediction(config: RandomForestTomorrowConfig) -> Optional[
         return None, None
     
     # 2. データ標準化
-    x_train_scaled, x_tomorrow_scaled, scaler = standardize_data(x_train, x_tomorrow)
+    x_train_scaled, x_tomorrow_scaled, scaler = standardize_data(config, x_train, x_tomorrow)
     if x_train_scaled is None or x_tomorrow_scaled is None:
         return None, None
     
