@@ -473,6 +473,10 @@ def process_power_data(df: pd.DataFrame) -> pd.DataFrame:
         # 日時インデックスの作成（効率化版）
         datetime_series = pd.to_datetime(df['DATE'] + ' ' + df['TIME'], format="%Y/%m/%d %H:%M")
         df.index = datetime_series
+
+        # 日時順に並べ替え、重複時刻は先頭のみ採用
+        df.sort_index(inplace=True)
+        df = df[~df.index.duplicated(keep='first')]
         
         # 時系列特徴量の生成（CSV結果維持のため元の型を保持）
         df["MONTH"] = df.index.month  # 月情報（1-12）

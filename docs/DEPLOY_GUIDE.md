@@ -714,6 +714,21 @@ Get-ChildItem -Recurse -Filter *.png AI/tomorrow/
 
 ---
 
+### 問題6: R²が低下する（日時順の乱れ・重複）
+
+**症状**: 予測精度が急落する／00:00,01:00,02:00 の順にならない
+
+**確認**:
+
+- `AI/data/juyo-2026.csv` が **日時昇順**（00:00→01:00→02:00）で並んでいるか
+- `AI/data/data.py` で **日時インデックスのソート** と **重複時刻の除去** が実施されているか
+
+**対処**:
+
+- 対象CSVの並びを修正後、`py -3.10 data/data.py` を再実行
+
+---
+
 ## ✅ デプロイ前チェックリスト
 
 ### ローカル環境
@@ -765,7 +780,7 @@ flowchart TB
   
     subgraph CI ["Continuous Integration"]
         B1["Checkout<br/>actions/checkout@v4"]
-        B2["Setup Python 3.11<br/>actions/setup-python@v5"]
+        B2["Setup Python 3.10.11<br/>actions/setup-python@v5"]
         B3["Install Dependencies<br/>pip install"]
         B4["Fetch Temperature<br/>Open-Meteo API"]
         B5["Data Processing<br/>data.py"]
@@ -815,7 +830,7 @@ flowchart TB
 | ステップ             | 処理内容                      | 成果物       | 失敗時の対処             |
 | -------------------- | ----------------------------- | ------------ | ------------------------ |
 | 1. Checkout          | ソースコードを取得            | -            | リポジトリアクセス権確認 |
-| 2. Setup Python      | Python 3.11 インストール      | python, pip  | バージョン確認           |
+| 2. Setup Python      | Python 3.10.11 インストール   | python, pip  | バージョン確認           |
 | 3. pip install       | 依存関係インストール          | packages/    | requirements.txt 再生成  |
 | 4. Fetch Temperature | Open-Meteo APIから気温取得    | tomorrow.csv | API接続確認              |
 | 5. Data Processing   | 特徴量エンジニアリング        | X.csv, Y.csv | データ確認               |
