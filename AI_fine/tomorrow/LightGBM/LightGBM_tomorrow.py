@@ -36,8 +36,8 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class LightGBMTomorrowConfig:
     """LightGBM翌日予測設定クラス"""
-    # ベースディレクトリの自動検出
-    _BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    # ベースディレクトリの動的検出
+    _BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     
     # 入力データ関連
     XTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtrain.csv')

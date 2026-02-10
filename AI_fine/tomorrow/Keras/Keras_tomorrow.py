@@ -74,8 +74,8 @@ except ImportError:
 class KerasTomorrowConfig:
     """Keras 翌日予測システム統一設定クラス"""
     
-    # プロジェクト基本設定
-    PROJECT_ROOT: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI"
+    # プロジェクト基本設定（動的パス）
+    PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     DATA_DIR: str = os.path.join(PROJECT_ROOT, 'data')
     TOMORROW_DIR: str = os.path.join(PROJECT_ROOT, 'tomorrow')
     KERAS_TRAIN_DIR: str = os.path.join(PROJECT_ROOT, 'train', 'Keras')
