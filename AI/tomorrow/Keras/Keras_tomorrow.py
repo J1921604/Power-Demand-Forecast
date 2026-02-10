@@ -102,7 +102,6 @@ class KerasTomorrowConfig:
     FLOAT_PRECISION: type = np.float32
     PAST_DAYS: int = 7  # 精度計算対象の過去日数
     FORECAST_DAYS: int = 7
-    LGBM_BLEND_WEIGHT: float = 0.7  # Keras予測に対するLightGBMブレンド比率
     
     # 可視化設定
     FIGURE_SIZE: Tuple[float, float] = (14.4, 8.1)  # 16:9
@@ -334,7 +333,15 @@ def load_scaler_and_model(model_path: str) -> Tuple[StandardScaler, object]:
 
 
 @robust_model_operation
-def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray, xtomorrow: np.ndarray, y_scaler: object = None) -> Tuple[np.ndarray, np.ndarray]:
+def predict_with_model(
+    model: object,
+    scaler: StandardScaler,
+    xtest: np.ndarray,
+    xtomorrow: np.ndarray,
+    y_scaler: object = None,
+    feature_min: Optional[np.ndarray] = None,
+    feature_max: Optional[np.ndarray] = None
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     学習済みモデルで予測を実行（パフォーマンス最適化・堅牢版）
     
@@ -354,6 +361,11 @@ def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray,
         # データ型を最適化（メモリ効率向上）
         xtest = xtest.astype(np.float32)
         xtomorrow = xtomorrow.astype(np.float32)
+
+        # 学習データの範囲で特徴量をクリップ（外れ値抑制）
+        if feature_min is not None and feature_max is not None:
+            xtest = np.clip(xtest, feature_min, feature_max)
+            xtomorrow = np.clip(xtomorrow, feature_min, feature_max)
         
         print(f"テストデータ標準化開始: {xtest.shape}")
         xtest_scaled = scaler.transform(xtest).astype(np.float32)
@@ -435,10 +447,14 @@ def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray,
                 ytomorrow_pred = ytomorrow_pred * scale_factor + offset
                 print(f"スケール調整完了: scale_factor={scale_factor}, offset={offset}")
         
-        # 予測値の妥当性チェック
-        ypred = np.clip(ypred, 1000, 5000)  # 物理的に妥当な範囲に制限
-        ytomorrow_pred = np.clip(ytomorrow_pred, 1000, 5000)
-        print(f"予測値範囲調整完了: テスト予測 {np.min(ypred):.0f}-{np.max(ypred):.0f}kW, 翌日予測 {np.min(ytomorrow_pred):.0f}-{np.max(ytomorrow_pred):.0f}kW")
+        # 予測値の妥当性チェック（y_scaler未使用時のみクリップ）
+        if y_scaler is None:
+            ypred = np.clip(ypred, 1000, 5000)  # 物理的に妥当な範囲に制限
+            ytomorrow_pred = np.clip(ytomorrow_pred, 1000, 5000)
+        print(
+            f"予測値範囲: テスト予測 {np.min(ypred):.0f}-{np.max(ypred):.0f}kW, "
+            f"翌日予測 {np.min(ytomorrow_pred):.0f}-{np.max(ytomorrow_pred):.0f}kW"
+        )
         
         # メモリクリーンアップ
         del xtest_scaled, xtomorrow_scaled
@@ -458,44 +474,6 @@ def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray,
         ypred = np.full((len(xtest), 1), 50000.0, dtype=np.float32)
         ytomorrow_pred = np.full((len(xtomorrow), 1), 50000.0, dtype=np.float32)
         return ypred, ytomorrow_pred
-
-
-def try_load_lightgbm_predictions(x_test: np.ndarray, x_tomorrow: np.ndarray, project_root: str) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-    """
-    LightGBMモデルの予測値を取得する（存在しない場合はNone）
-
-    Args:
-        x_test: テスト用特徴量
-        x_tomorrow: 翌日予測用特徴量
-        project_root: プロジェクトルート
-
-    Returns:
-        Tuple[Optional[np.ndarray], Optional[np.ndarray]]: (test_pred, tomorrow_pred)
-    """
-    try:
-        model_path = os.path.join(project_root, 'train', 'LightGBM', 'LightGBM_model.sav')
-        scaler_path = os.path.join(project_root, 'train', 'LightGBM', 'LightGBM_model_scaler.pkl')
-        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
-            return None, None
-
-        with open(scaler_path, 'rb') as f:
-            scaler = pickle.load(f)
-        with open(model_path, 'rb') as f:
-            model = pickle.load(f)
-
-        x_tomorrow_scaled = scaler.transform(x_tomorrow).astype(np.float32)
-        tomorrow_pred = model.predict(x_tomorrow_scaled)
-
-        test_pred = None
-        if x_test is not None:
-            x_test_scaled = scaler.transform(x_test).astype(np.float32)
-            test_pred = model.predict(x_test_scaled)
-
-        return test_pred, tomorrow_pred
-    except Exception as e:
-        print(f"[WARN] LightGBM予測の取得に失敗: {e}")
-        return None, None
-
 
 
 
@@ -889,6 +867,8 @@ def tomorrow(
         
         # 訓練・テストデータの読み込み（最適化版）
         Xtrain, Xtest, Ytrain = load_training_data(xtrain_csv, xtest_csv, ytrain_csv)
+        feature_min = np.min(Xtrain, axis=0)
+        feature_max = np.max(Xtrain, axis=0)
         
         # テストラベルと明日データの読み込み（最適化版）
         Ytest, Xtomorrow = load_test_and_tomorrow_data(ytest_csv, xtomorrow_csv)
@@ -902,7 +882,15 @@ def tomorrow(
         
         # 予測の実行（メモリ効率化）
         # Xtomorrow全体(過去7日+未来7日)を使って予測
-        Ypred, Ytomorrow_pred = predict_with_model(keras_info, scaler, Xtest, Xtomorrow, y_scaler)
+        Ypred, Ytomorrow_pred = predict_with_model(
+            keras_info,
+            scaler,
+            Xtest,
+            Xtomorrow,
+            y_scaler,
+            feature_min=feature_min,
+            feature_max=feature_max
+        )
 
         # もし y_scaler があれば逆変換は既に適用済み
         if y_scaler is None:
@@ -911,17 +899,6 @@ def tomorrow(
         # データ型最適化（float32変換）
         Ypred = Ypred.astype(np.float32)
         Ytomorrow_pred = Ytomorrow_pred.astype(np.float32)
-
-        # LightGBMとのブレンドで予測の安定性を向上（評価補正は行わない）
-        lgbm_test_pred, lgbm_tomorrow_pred = try_load_lightgbm_predictions(Xtest, Xtomorrow, config.PROJECT_ROOT)
-        if lgbm_tomorrow_pred is not None:
-            weight = float(config.LGBM_BLEND_WEIGHT)
-            lgbm_tomorrow_pred = lgbm_tomorrow_pred.reshape(-1, 1).astype(np.float32)
-            Ytomorrow_pred = (1.0 - weight) * Ytomorrow_pred + weight * lgbm_tomorrow_pred
-            if lgbm_test_pred is not None and len(lgbm_test_pred) == len(Ypred):
-                lgbm_test_pred = lgbm_test_pred.reshape(-1, 1).astype(np.float32)
-                Ypred = (1.0 - weight) * Ypred + weight * lgbm_test_pred
-            print(f"[INFO] LightGBMブレンド適用: weight={weight:.2f}")
 
         # メモリ監視
         monitor_memory_usage("予測完了")

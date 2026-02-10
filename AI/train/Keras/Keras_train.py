@@ -96,17 +96,17 @@ class KerasConfig:
     """Keras学習設定クラス（設定値統一管理）"""
     DEFAULT_FEATURE_COLUMNS: List[str] = field(default_factory=lambda: ["MONTH", "WEEK", "HOUR", "TEMP"])
     DEFAULT_TARGET_COLUMNS: List[str] = field(default_factory=lambda: ["KW"])
-    DEFAULT_LEARNING_RATE: float = 0.001
+    DEFAULT_LEARNING_RATE: float = 0.0005
     DEFAULT_EPOCHS: int = 500
-    DEFAULT_BATCH_SIZE: int = 64  # バッチサイズを64に最適化（32→64）
+    DEFAULT_BATCH_SIZE: int = 128  # バッチサイズを128に最適化（64→128）
     DEFAULT_VALIDATION_SPLIT: float = 0.2
-    DEFAULT_PATIENCE: int = 20  # 早期終了の忍耐度を適切に設定
-    NEURAL_NETWORK_UNITS: int = 128  # ユニット数を128に増加
+    DEFAULT_PATIENCE: int = 30  # 早期終了の忍耐度を延長して最適化を促進
+    NEURAL_NETWORK_UNITS: int = 256  # ユニット数を256に増加
     RANDOM_STATE: int = 42
     
     # 正則化設定（軽微な正則化で過学習防止）
-    DROPOUT_RATE: float = 0.1  # 軽微なドロップアウト
-    L2_REGULARIZATION: float = 0.001  # 軽微なL2正則化
+    DROPOUT_RATE: float = 0.05  # 過学習抑制を緩めつつ汎化維持
+    L2_REGULARIZATION: float = 0.0005  # L2正則化を軽減
     
     # メモリ最適化設定
     DTYPE_CONFIG: Dict[str, str] = field(default_factory=lambda: {
@@ -250,10 +250,10 @@ def create_keras_model(input_dim: int, learning_rate: float = None) -> Sequentia
     Kerasディープニューラルネットワークモデルを作成する（改善版v3）
     
     改善内容v3:
-    - より深いネットワーク構造: 128→128→64→32→1層構成（表現力向上）
-    - Dropout適切化: 0.1で過学習抑制
-    - L2正則化適切化: 0.001で汎化性能向上
-    - バッチサイズ最適化: 64で安定学習
+    - より深いネットワーク構造: 256→256→64→32→1層構成（表現力向上）
+    - Dropout適切化: 0.05で過学習抑制
+    - L2正則化適切化: 0.0005で汎化性能向上
+    - バッチサイズ最適化: 128で安定学習
     - 目的変数正規化: y_scalerで学習安定化
     
     Args:
@@ -273,7 +273,7 @@ def create_keras_model(input_dim: int, learning_rate: float = None) -> Sequentia
         raise ValueError(f"無効な入力次元数: {input_dim}")
         
     print(f"Kerasモデルを構築中... (入力次元: {input_dim})")
-    print(f"改善版v3アーキテクチャ: 128→128→64→32→1")
+    print(f"改善版v3アーキテクチャ: 256→256→64→32→1")
     print(f"過学習対策v3: Dropout={config.DROPOUT_RATE}, L2正則化={config.L2_REGULARIZATION}, Batch={config.DEFAULT_BATCH_SIZE}")
     
     # より深いモデル構築（精度向上のため）
@@ -350,7 +350,7 @@ def train_model_with_validation(model: Sequential,
     # Early Stoppingコールバック（改善版）
     early_stopping = EarlyStopping(
         monitor='val_loss',
-        min_delta=0.0001,  # より細かい改善幅
+        min_delta=0.00001,  # より細かい改善幅
         patience=patience,  # 設定された忍耐度を使用
         restore_best_weights=True,
         verbose=1
