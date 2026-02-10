@@ -628,6 +628,31 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
    - "Run workflow" をクリック
    - ワークフロー完了後、Actionsログで `最終結果 - RMSE: XXX kW, R2: X.XXXX, MAE: XXX kW` を確認
 
+**問題4: メトリクスがGitHub Pagesと一致しない**
+
+**症状**: ローカルの評価スコアとGitHub Pagesの表示が一致しない
+
+**解決手順**:
+
+1. ローカルでメトリクスを再生成
+
+  ```powershell
+  C:\Users\h-ham\spec-kit\Power-Demand-Forecast\.venv\Scripts\python.exe AI\generate_metrics.py
+  ```
+
+2. 出力が以下と一致することを確認
+
+  ```
+  Metrics Aggregation for GitHub Pages
+  ============================================================
+  ✓ LightGBM: RMSE=216.171, R2=0.8298, MAE=166.169
+  ✓ Keras: RMSE=190.07, R2=0.8684, MAE=152.245
+  ✓ RandomForest: RMSE=248.818, R2=0.7745, MAE=166.591
+  ✓ Pycaret: RMSE=224.641, R2=0.8162, MAE=170.624
+  ```
+
+3. `AI/metrics.json` が更新されたことを確認し、GitHub Pagesを再デプロイ
+
 **期待される結果（目安）**:
 
 - 学習（train/*_train.py）: LightGBM R² ≥ 0.92 / Keras・RandomForest・Pycaret R² ≥ 0.90

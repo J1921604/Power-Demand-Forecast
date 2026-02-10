@@ -478,6 +478,16 @@ permissions:
   issues: write     # R²<0.8時にIssue自動作成
 ```
 
+#### 1.1 concurrency設定（定時実行の滞留回避）
+
+毎朝の定時実行が前回ジョブの滞留で遅延しないよう、同一グループの実行中ジョブはキャンセルします。
+
+```yaml
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+```
+
 #### 2. Python環境セットアップ
 
 - **Python 3.10.11**: 公式アクションでインストール
@@ -728,6 +738,33 @@ Get-ChildItem -Recurse -Filter *.png AI/tomorrow/
 
 - 対象CSVの並びを修正後、`py -3.10 data/data.py` を再実行
 - 最新データ取得をやり直す場合は `py -3.10 tomorrow/data.py` を再実行
+
+---
+
+### 問題7: メトリクスがGitHub Pagesと一致しない
+
+**症状**: ローカルで算出した評価指標とPages表示が一致しない
+
+**解決手順**:
+
+1. ローカルでメトリクスを再生成
+
+  ```powershell
+  C:\Users\h-ham\spec-kit\Power-Demand-Forecast\.venv\Scripts\python.exe AI\generate_metrics.py
+  ```
+
+2. 出力が以下と一致することを確認
+
+  ```
+  Metrics Aggregation for GitHub Pages
+  ============================================================
+  ✓ LightGBM: RMSE=216.171, R2=0.8298, MAE=166.169
+  ✓ Keras: RMSE=190.07, R2=0.8684, MAE=152.245
+  ✓ RandomForest: RMSE=248.818, R2=0.7745, MAE=166.591
+  ✓ Pycaret: RMSE=224.641, R2=0.8162, MAE=170.624
+  ```
+
+3. `AI/metrics.json` の更新後にデプロイを再実行
 
 ---
 
