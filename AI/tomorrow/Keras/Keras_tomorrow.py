@@ -11,7 +11,7 @@ import os
 import time
 import gc
 from datetime import datetime, timedelta
-from typing import Tuple, Any
+from typing import Tuple, Any, Optional
 from dataclasses import dataclass
 from functools import wraps
 import glob
@@ -23,8 +23,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 import traceback
 
 # パフォーマンス監視
@@ -103,6 +102,7 @@ class KerasTomorrowConfig:
     FLOAT_PRECISION: type = np.float32
     PAST_DAYS: int = 7  # 精度計算対象の過去日数
     FORECAST_DAYS: int = 7
+    LGBM_BLEND_WEIGHT: float = 0.7  # Keras予測に対するLightGBMブレンド比率
     
     # 可視化設定
     FIGURE_SIZE: Tuple[float, float] = (14.4, 8.1)  # 16:9
@@ -460,6 +460,45 @@ def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray,
         return ypred, ytomorrow_pred
 
 
+def try_load_lightgbm_predictions(x_test: np.ndarray, x_tomorrow: np.ndarray, project_root: str) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """
+    LightGBMモデルの予測値を取得する（存在しない場合はNone）
+
+    Args:
+        x_test: テスト用特徴量
+        x_tomorrow: 翌日予測用特徴量
+        project_root: プロジェクトルート
+
+    Returns:
+        Tuple[Optional[np.ndarray], Optional[np.ndarray]]: (test_pred, tomorrow_pred)
+    """
+    try:
+        model_path = os.path.join(project_root, 'train', 'LightGBM', 'LightGBM_model.sav')
+        scaler_path = os.path.join(project_root, 'train', 'LightGBM', 'LightGBM_model_scaler.pkl')
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+            return None, None
+
+        with open(scaler_path, 'rb') as f:
+            scaler = pickle.load(f)
+        with open(model_path, 'rb') as f:
+            model = pickle.load(f)
+
+        x_tomorrow_scaled = scaler.transform(x_tomorrow).astype(np.float32)
+        tomorrow_pred = model.predict(x_tomorrow_scaled)
+
+        test_pred = None
+        if x_test is not None:
+            x_test_scaled = scaler.transform(x_test).astype(np.float32)
+            test_pred = model.predict(x_test_scaled)
+
+        return test_pred, tomorrow_pred
+    except Exception as e:
+        print(f"[WARN] LightGBM予測の取得に失敗: {e}")
+        return None, None
+
+
+
+
 @robust_model_operation
 def save_tomorrow_predictions(ytomorrow_pred: np.ndarray, output_path: str) -> None:
     """
@@ -581,91 +620,6 @@ def calculate_evaluation_metrics(ypred: np.ndarray, ytest: np.ndarray) -> Tuple[
         print(f"エラー: 評価指標の計算中にエラーが発生しました: {e}")
         raise
 
-
-def recalibrate_with_recent_actuals(xtomorrow: np.ndarray, ytest: np.ndarray, scaler: StandardScaler) -> Tuple[np.ndarray, float]:
-    """
-    直近実測値を使って簡易線形モデルで再較正する
-
-    Args:
-        xtomorrow: 翌日予測用特徴量（過去7日+予測7日）
-        ytest: 直近実測値（過去7日）
-        scaler: 学習済みスケーラー
-
-    Returns:
-        Tuple[np.ndarray, float]: 再較正後の予測値, R2スコア
-    """
-    try:
-        if xtomorrow is None or ytest is None:
-            return xtomorrow, float('-inf')
-
-        ytest_flat = ytest.reshape(-1)
-        eval_len = len(ytest_flat)
-        if eval_len < 2:
-            return xtomorrow, float('-inf')
-
-        # 特徴量の標準化（学習時スケーラーを利用）
-        x_scaled = scaler.transform(xtomorrow).astype(np.float32)
-        x_recent = x_scaled[:eval_len]
-
-        # 線形回帰で直近期間をフィット
-        linear_model = LinearRegression()
-        linear_model.fit(x_recent, ytest_flat)
-
-        # 全期間の予測
-        y_full = linear_model.predict(x_scaled).astype(np.float32)
-        y_eval = y_full[:eval_len]
-
-        # R2評価
-        r2 = r2_score(ytest_flat, y_eval)
-        return y_full.reshape(-1, 1), r2
-    except Exception as e:
-        print(f"[WARN] 直近実測での再較正に失敗: {e}")
-        return xtomorrow, float('-inf')
-
-
-def apply_lag_shift(values: np.ndarray, lag: int) -> np.ndarray:
-    """予測値を指定ラグでシフトする（端は端値で埋める）"""
-    if lag == 0:
-        return values
-
-    shifted = np.empty_like(values)
-    if lag > 0:
-        shifted[:lag] = values[0]
-        shifted[lag:] = values[:-lag]
-    else:
-        lag_abs = -lag
-        shifted[-lag_abs:] = values[-1]
-        shifted[:-lag_abs] = values[lag_abs:]
-    return shifted
-
-
-def adjust_with_best_lag(ypred: np.ndarray, ytest: np.ndarray, max_lag: int = 3) -> Tuple[np.ndarray, float, int]:
-    """過去実測との一致度が最大になるラグを探索して補正する"""
-    try:
-        ypred_flat = ypred.reshape(-1, 1)
-        ytest_flat = ytest.reshape(-1)
-        eval_len = min(len(ypred_flat), len(ytest_flat))
-        if eval_len < 2:
-            return ypred, float('-inf'), 0
-
-        best_r2 = float('-inf')
-        best_lag = 0
-
-        for lag in range(-max_lag, max_lag + 1):
-            shifted_eval = apply_lag_shift(ypred_flat[:eval_len], lag)
-            r2 = r2_score(ytest_flat[:eval_len], shifted_eval[:eval_len].reshape(-1))
-            if r2 > best_r2:
-                best_r2 = r2
-                best_lag = lag
-
-        if best_lag != 0:
-            adjusted = apply_lag_shift(ypred_flat, best_lag)
-            return adjusted, best_r2, best_lag
-
-        return ypred, best_r2, 0
-    except Exception as e:
-        print(f"[WARN] ラグ補正に失敗: {e}")
-        return ypred, float('-inf'), 0
 
 def load_model_and_scaler(model_path: str) -> Tuple[Any, Any]:
     """
@@ -958,6 +912,17 @@ def tomorrow(
         Ypred = Ypred.astype(np.float32)
         Ytomorrow_pred = Ytomorrow_pred.astype(np.float32)
 
+        # LightGBMとのブレンドで予測の安定性を向上（評価補正は行わない）
+        lgbm_test_pred, lgbm_tomorrow_pred = try_load_lightgbm_predictions(Xtest, Xtomorrow, config.PROJECT_ROOT)
+        if lgbm_tomorrow_pred is not None:
+            weight = float(config.LGBM_BLEND_WEIGHT)
+            lgbm_tomorrow_pred = lgbm_tomorrow_pred.reshape(-1, 1).astype(np.float32)
+            Ytomorrow_pred = (1.0 - weight) * Ytomorrow_pred + weight * lgbm_tomorrow_pred
+            if lgbm_test_pred is not None and len(lgbm_test_pred) == len(Ypred):
+                lgbm_test_pred = lgbm_test_pred.reshape(-1, 1).astype(np.float32)
+                Ypred = (1.0 - weight) * Ypred + weight * lgbm_test_pred
+            print(f"[INFO] LightGBMブレンド適用: weight={weight:.2f}")
+
         # メモリ監視
         monitor_memory_usage("予測完了")
         
@@ -968,29 +933,6 @@ def tomorrow(
         eval_pred = Ytomorrow_pred[:len(Ytest)].copy()
         rmse, r2_score = calculate_evaluation_metrics(eval_pred, Ytest)
 
-        # ラグ補正で改善する場合は評価用に適用
-        adjusted_pred, lag_r2, best_lag = adjust_with_best_lag(eval_pred, Ytest, max_lag=3)
-        if lag_r2 > r2_score:
-            print(f"[INFO] ラグ補正で改善: {r2_score:.4f} -> {lag_r2:.4f} (lag={best_lag})")
-            eval_pred = adjusted_pred.astype(np.float32)
-            rmse, r2_score = calculate_evaluation_metrics(eval_pred, Ytest)
-
-        # R2が閾値未満の場合は直近実測で再較正（オンライン補正）
-        if r2_score < 0.80:
-            print(f"[WARN] R2スコアが閾値未満({r2_score:.4f})のため再較正を試行します")
-            recalibrated_pred, recalibrated_r2 = recalibrate_with_recent_actuals(Xtomorrow, Ytest, scaler)
-            if recalibrated_r2 > r2_score:
-                print(f"[INFO] 再較正で改善: {r2_score:.4f} -> {recalibrated_r2:.4f}")
-                eval_pred = recalibrated_pred[:len(Ytest)].astype(np.float32)
-                rmse, r2_score = calculate_evaluation_metrics(eval_pred, Ytest)
-            else:
-                print(f"[INFO] 再較正は改善せず: {recalibrated_r2:.4f} (現状維持)")
-
-        # それでも閾値未満の場合は、過去期間を実測値でバックフィル（評価のみ）
-        if r2_score < 0.80:
-            print(f"[WARN] R2スコアが閾値未満({r2_score:.4f})のため、評価用に過去期間を実測値で補完します")
-            eval_pred = Ytest.reshape(-1, 1).astype(np.float32)
-            rmse, r2_score = calculate_evaluation_metrics(eval_pred, Ytest)
         
         # 予測結果の保存（最適化版）
         save_tomorrow_predictions(Ytomorrow_pred, ytomorrow_csv)

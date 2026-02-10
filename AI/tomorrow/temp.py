@@ -371,8 +371,16 @@ def save_temperature_csv(df: pd.DataFrame, output_path: str) -> None:
             os.makedirs(output_dir, exist_ok=True)
             logger.info(f"ディレクトリ作成: {output_dir}")
         
+        # 学習・予測で想定している特徴量の列順に統一
+        required_cols = list(config.REQUIRED_COLUMNS)
+        missing_cols = [c for c in required_cols if c not in df.columns]
+        if missing_cols:
+            raise ValueError(f"必須カラムが不足: {missing_cols}")
+
+        df_to_save = df[required_cols].copy()
+
         # CSVファイル保存（効率的設定）
-        df.to_csv(
+        df_to_save.to_csv(
             output_path, 
             index=False, 
             encoding='utf-8',
@@ -418,6 +426,76 @@ def load_latest_anchor_datetime(marker_path: str) -> Optional[dt.datetime]:
         return None
 
 
+def load_period_info(period_info_path: str) -> Optional[Dict[str, Any]]:
+    """
+    period_info.json を読み込む
+
+    Args:
+        period_info_path: 期間情報JSONファイルのパス
+
+    Returns:
+        Optional[Dict[str, Any]]: 読み込めた場合は辞書、失敗時はNone
+    """
+    try:
+        if not os.path.exists(period_info_path):
+            return None
+        import json
+        with open(period_info_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"period_info.json 読込失敗: {e}")
+        return None
+
+
+def apply_period_info_filter(df: pd.DataFrame, period_info: Dict[str, Any]) -> pd.DataFrame:
+    """
+    period_info.json に基づいて過去/未来の時間窓を揃える
+
+    Args:
+        df: 気温データフレーム（timeカラムを含む）
+        period_info: period_info.json の内容
+
+    Returns:
+        pd.DataFrame: フィルタリング後のデータフレーム
+    """
+    try:
+        if 'time' not in df.columns:
+            logger.warning("'time'カラムが見つかりません。期間調整をスキップします。")
+            return df
+
+        start_dt = pd.to_datetime(period_info.get("start_datetime"))
+        end_dt = pd.to_datetime(period_info.get("end_datetime"))
+        forecast_days = int(period_info.get("forecast_days", 7))
+        target_hours = int(period_info.get("target_hours", 0))
+
+        if pd.isna(start_dt) or pd.isna(end_dt):
+            logger.warning("period_info の start/end が不正です。期間調整をスキップします。")
+            return df
+
+        past_mask = (df['time'] >= start_dt) & (df['time'] <= end_dt)
+        past_data = df[past_mask].copy()
+
+        future_start = end_dt + pd.Timedelta(hours=1)
+        future_end = future_start + pd.Timedelta(days=forecast_days)
+        future_mask = (df['time'] >= future_start) & (df['time'] < future_end)
+        future_data = df[future_mask].copy()
+
+        filtered = pd.concat([past_data, future_data], ignore_index=True)
+        logger.info(
+            f"period_info調整: 過去{len(past_data)}行 + 未来{len(future_data)}行 = {len(filtered)}行"
+        )
+
+        if target_hours and len(past_data) != target_hours:
+            logger.warning(
+                f"過去データ行数が期待値と一致しません ({len(past_data)}/{target_hours})"
+            )
+
+        return filtered
+    except Exception as e:
+        logger.warning(f"period_info による期間調整に失敗: {e}")
+        return df
+
+
 def temp(
     latitude: str,
     longitude: str,
@@ -448,12 +526,27 @@ def temp(
         monitor_memory_usage("temp関数開始")
         logger.info("気温データ取得処理開始")
         
-        # 最新データ日時に合わせた時間窓を優先（存在しない場合は従来方式）
+        # period_info.json を優先して期間同期
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        period_info_path = os.path.join(script_dir, "period_info.json")
+        period_info = load_period_info(period_info_path)
+
+        # 最新データ日時に合わせた時間窓を優先（period_infoがない場合は従来方式）
         marker_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "latest_datetime.txt")
-        anchor_dt = load_latest_anchor_datetime(marker_path)
+        anchor_dt = None if period_info else load_latest_anchor_datetime(marker_path)
         start_date = None
         end_date = None
-        if anchor_dt is not None:
+        if period_info is not None:
+            try:
+                start_dt = pd.to_datetime(period_info.get("start_datetime"))
+                end_dt = pd.to_datetime(period_info.get("end_datetime"))
+                forecast_days_int = int(period_info.get("forecast_days", forecast_days))
+                start_date = start_dt.date().strftime("%Y-%m-%d")
+                end_date = (end_dt + dt.timedelta(days=forecast_days_int)).date().strftime("%Y-%m-%d")
+                logger.info(f"period_info に合わせて取得範囲を固定: {start_date} 〜 {end_date}")
+            except Exception as e:
+                logger.warning(f"period_info の日付計算に失敗: {e} - 既定のpast/forecastを使用")
+        elif anchor_dt is not None:
             anchor_date = anchor_dt.date()
             past_days_int = int(past_days)
             forecast_days_int = int(forecast_days)
@@ -468,12 +561,16 @@ def temp(
         api_data = fetch_temperature_data(latitude, longitude, timezone, past_days, forecast_days, start_date, end_date)
         
         # データフレーム作成
-        temperature_df = create_temperature_dataframe(api_data, include_time=(anchor_dt is not None))
+        temperature_df = create_temperature_dataframe(api_data, include_time=(anchor_dt is not None or period_info is not None))
         try:
             if 'time' in temperature_df.columns:
                 logger.info(f"気温データ範囲: {temperature_df['time'].min()} 〜 {temperature_df['time'].max()}")
         except Exception:
             pass
+
+        # period_info がある場合は正確な期間で調整
+        if period_info is not None:
+            temperature_df = apply_period_info_filter(temperature_df, period_info)
 
         # アンカーがある場合は時間窓でフィルタリング
         if anchor_dt is not None:

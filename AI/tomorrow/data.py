@@ -705,6 +705,12 @@ def process_temperature_and_create_dataset(
 
         # 欠損値除去
         df_kw = df_kw.dropna()
+
+        # 抽出後の実際の期間（temp.py の期間同期の基準）
+        actual_start_datetime = df_kw.index.min()
+        actual_end_datetime = df_kw.index.max()
+        print(f"開始日時(確定): {actual_start_datetime}")
+        print(f"終了日時(確定): {actual_end_datetime}")
         
         # 目的変数カラム
         y_cols = ["KW"]
@@ -720,6 +726,20 @@ def process_temperature_and_create_dataset(
         if len(y_csv) != target_hours:
             raise ValueError(f"Ytest.csv 行数が不正です: {len(y_csv)}行 (期待値 {target_hours}行)")
         print(f"[OK] Ytest.csv 行数検証済: {len(y_csv)}行 (期待値 {target_hours}行)")
+
+        # 期間情報をJSONファイルに保存（temp.pyで使用）
+        import json
+        period_info = {
+            "start_datetime": actual_start_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_datetime": actual_end_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            "past_days": past_days_int,
+            "forecast_days": forecast_days_int,
+            "target_hours": target_hours
+        }
+        period_info_path = os.path.join(output_dir, "period_info.json")
+        with open(period_info_path, 'w', encoding='utf-8') as f:
+            json.dump(period_info, f, indent=2, ensure_ascii=False)
+        print(f"期間情報保存完了: {period_info_path}")
         
         print(f"tomorrow予測データセット作成完了: {Ytest_csv} ({len(y_csv)}行)")
         return None
