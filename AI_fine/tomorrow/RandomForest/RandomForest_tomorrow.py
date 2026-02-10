@@ -38,25 +38,22 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class RandomForestTomorrowConfig:
     """RandomForest翌日予測設定クラス"""
-    # ベースディレクトリの動的検出
-    _BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    
     # 入力データ関連
-    XTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtrain.csv')
-    XTEST_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtest.csv')
-    YTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Ytrain.csv')
-    YTEST_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'Ytest.csv')
-    XTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'tomorrow.csv')
+    XTRAIN_CSV: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Xtrain.csv"
+    XTEST_CSV: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Xtest.csv"
+    YTRAIN_CSV: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Ytrain.csv"
+    YTEST_CSV: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\tomorrow\Ytest.csv"
+    XTOMORROW_CSV: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\tomorrow\tomorrow.csv"
     
     # モデル関連
-    MODEL_SAV: str = os.path.join(_BASE_DIR, 'train', 'RandomForest', 'RandomForest_model.sav')
+    MODEL_SAV: str = r'C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\train\RandomForest\RandomForest_model.sav'
     
     # 出力関連
-    YPRED_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_Ypred.csv')
-    YPRED_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_Ypred.png')
-    YPRED_7D_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_Ypred_7d.png')
-    YTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_tomorrow.csv')
-    YTOMORROW_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_tomorrow.png')
+    YPRED_CSV: str = r'C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\tomorrow\RandomForest\RandomForest_Ypred.csv'
+    YPRED_PNG: str = r'C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\tomorrow\RandomForest\RandomForest_Ypred.png'
+    YPRED_7D_PNG: str = r'C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\tomorrow\RandomForest\RandomForest_Ypred_7d.png'
+    YTOMORROW_CSV: str = r'C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\tomorrow\RandomForest\RandomForest_tomorrow.csv'
+    YTOMORROW_PNG: str = r'C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\tomorrow\RandomForest\RandomForest_tomorrow.png'
     
     # 設定パラメータ
     PAST_DAYS: int = 7

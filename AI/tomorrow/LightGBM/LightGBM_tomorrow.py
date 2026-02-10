@@ -7,10 +7,12 @@
 """
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from sklearn.preprocessing import StandardScaler
 import pickle
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import traceback
 import os
 import datetime
@@ -26,7 +28,23 @@ plt.rcParams['figure.dpi'] = 100
 plt.rcParams['savefig.dpi'] = 100
 plt.rcParams['savefig.bbox'] = 'tight'
 plt.rcParams['savefig.pad_inches'] = 0.1
-plt.rcParams['font.family'] = 'DejaVu Sans'
+try:
+    from matplotlib import font_manager
+    preferred_fonts = ['Meiryo', 'Yu Gothic', 'Noto Sans CJK JP', 'IPAexGothic', 'TakaoPGothic', 'IPAPGothic', 'DejaVu Sans']
+    available = {f.name for f in font_manager.fontManager.ttflist}
+    chosen = None
+    for fname in preferred_fonts:
+        if fname in available:
+            chosen = fname
+            break
+    if chosen:
+        plt.rcParams['font.family'] = [chosen, 'DejaVu Sans']
+    else:
+        plt.rcParams['font.family'] = 'DejaVu Sans'
+    plt.rcParams['axes.unicode_minus'] = False
+except Exception:
+    plt.rcParams['font.family'] = 'DejaVu Sans'
+
 plt.rcParams['font.size'] = 10
 plt.rcParams['axes.grid'] = True
 plt.rcParams['grid.alpha'] = 0.3
@@ -36,25 +54,23 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class LightGBMTomorrowConfig:
     """LightGBM翌日予測設定クラス"""
-    # ベースディレクトリの動的検出
-    _BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    
     # 入力データ関連
-    XTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtrain.csv')
-    XTEST_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtest.csv')
-    YTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Ytrain.csv')
-    YTEST_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'Ytest.csv')
-    XTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'tomorrow.csv')
+    XTRAIN_CSV: str = r"data/Xtrain.csv"
+    XTEST_CSV: str = r"data/Xtest.csv"
+    YTRAIN_CSV: str = r"data/Ytrain.csv"
+    YTEST_CSV: str = r"tomorrow/Ytest.csv"
+    XTOMORROW_CSV: str = r"tomorrow/tomorrow.csv"
     
     # モデル関連
-    MODEL_SAV: str = os.path.join(_BASE_DIR, 'train', 'LightGBM', 'LightGBM_model.sav')
+    MODEL_SAV: str = r'train/LightGBM/LightGBM_model.sav'
+    SCALER_PKL: str = r'train/LightGBM/LightGBM_model_scaler.pkl'
     
     # 出力関連
-    YPRED_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'LightGBM', 'LightGBM_Ypred.csv')
-    YPRED_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'LightGBM', 'LightGBM_Ypred.png')
-    YPRED_7D_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'LightGBM', 'LightGBM_Ypred_7d.png')
-    YTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'LightGBM', 'LightGBM_tomorrow.csv')
-    YTOMORROW_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'LightGBM', 'LightGBM_tomorrow.png')
+    YPRED_CSV: str = r'tomorrow/LightGBM/LightGBM_Ypred.csv'
+    YPRED_PNG: str = r'tomorrow/LightGBM/LightGBM_Ypred.png'
+    YPRED_7D_PNG: str = r'tomorrow/LightGBM/LightGBM_Ypred_7d.png'
+    YTOMORROW_CSV: str = r'tomorrow/LightGBM/LightGBM_tomorrow.csv'
+    YTOMORROW_PNG: str = r'tomorrow/LightGBM/LightGBM_tomorrow.png'
     
     # 設定パラメータ
     PAST_DAYS: str = '7'
@@ -99,26 +115,21 @@ def robust_model_operation(operation_name: str):
         return wrapper
     return decorator
 
-@robust_model_operation("学習データ読み込み")
-def load_training_data(config: LightGBMTomorrowConfig) -> Tuple[pd.DataFrame, StandardScaler]:
-    """学習データを読み込み、標準化スケーラーを作成"""
-    X_train = pd.read_csv(config.XTRAIN_CSV)
-    
-    # 標準化スケーラーを作成・学習
-    scaler = StandardScaler()
-    scaler.fit(X_train)
-    X_train_scaled = pd.DataFrame(scaler.transform(X_train), columns=X_train.columns)
-    
-    print(f"学習データ形状: {X_train_scaled.shape}")
-    return X_train_scaled, scaler
+@robust_model_operation("スケーラー読み込み")
+def load_scaler(config: LightGBMTomorrowConfig) -> StandardScaler:
+    """保存済みスケーラーを読み込み"""
+    with open(config.SCALER_PKL, 'rb') as f:
+        scaler = pickle.load(f)
+    print(f"スケーラー読み込み完了: {config.SCALER_PKL}")
+    return scaler
 
 @robust_model_operation("テスト・翌日データ読み込み")
-def load_test_and_tomorrow_data(config: LightGBMTomorrowConfig, scaler: StandardScaler) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def load_test_and_tomorrow_data(config: LightGBMTomorrowConfig, scaler: StandardScaler) -> Tuple[pd.DataFrame, np.ndarray]:
     """テストデータと翌日データを読み込み、標準化"""
     y_test = pd.read_csv(config.YTEST_CSV).values.astype('int32').flatten()
     Xtomorrow = pd.read_csv(config.XTOMORROW_CSV)
     
-    # 翌日データをNumpy配列に変換してから標準化（カラム名チェックを回避）
+    # 翌日データをNumpy配列に変換してから標準化
     Xtomorrow_array = Xtomorrow.to_numpy()
     Xtomorrow_scaled = scaler.transform(Xtomorrow_array)
     
@@ -135,15 +146,28 @@ def load_model(config: LightGBMTomorrowConfig):
     return model
 
 @robust_model_operation("予測実行")
-def predict_with_model(model, Xtomorrow_scaled: pd.DataFrame, y_test: pd.DataFrame) -> Tuple[pd.DataFrame, float, float, float]:
-    """モデルを使用して予測を実行し、精度指標を計算"""
-    # 予測実行
-    Ytomorrow = model.predict(Xtomorrow_scaled)
+def predict_with_model(model, Xtomorrow_scaled: np.ndarray, y_test: pd.DataFrame) -> Tuple[np.ndarray, float, float, float, float]:
+    """
+    モデルを使用して予測を実行し、精度を計算
     
-    # データ長を合わせる
+    Returns:
+        Tuple[Ytomorrow, RMSE, Score, R2, MAE]
+    """
+    # Xtomorrow_scaledは過去7日分+予測7日分の合計14日分（336時間）
+    # y_testは過去7日分の実測値（168時間）
+    
+    # LightGBM 4.6.0の既知の問題を回避: _n_classesがNoneの場合を処理
+    if hasattr(model, '_n_classes') and model._n_classes is None:
+        # 回帰モデルの場合は_n_classesを1に設定（回避策）
+        model._n_classes = 1
+    
+    # 全期間の予測を実行
+    Ytomorrow_full = model.predict(Xtomorrow_scaled)
+    
+    # データ長を安全に調整
     min_length = min(len(Xtomorrow_scaled), len(y_test))
     
-    # 精度計算
+    # 精度計算（最小長で調整）
     try:
         accuracy = model.score(Xtomorrow_scaled[:min_length], y_test[:min_length])
         print(f'テスト精度: {accuracy:.4f}')
@@ -152,37 +176,44 @@ def predict_with_model(model, Xtomorrow_scaled: pd.DataFrame, y_test: pd.DataFra
         accuracy = 0.0
     
     # RMSE・スコア計算
-    mse = mean_squared_error(y_test[:min_length], Ytomorrow[:min_length])
+    mse = mean_squared_error(y_test[:min_length], Ytomorrow_full[:min_length])
     REG_RMSE = mse ** 0.5
     REG_SCORE = 1.0 - mse ** 0.5 / y_test[:min_length].mean()
+    # 標準的な指標も計算して出力（MAE, R2）
+    MAE = mean_absolute_error(y_test[:min_length], Ytomorrow_full[:min_length])
+    R2 = r2_score(y_test[:min_length], Ytomorrow_full[:min_length])
+
+    # 統一フォーマットで一行出力（RMSE/R2/MAE）
+    print(f"最終結果 - RMSE: {REG_RMSE:.3f} kW, R2: {R2:.4f}, MAE: {MAE:.3f} kW")
     
-    print(f"REG RMSE : {REG_RMSE:.2f} kW")
-    print(f"REG SCORE: {REG_SCORE:.2f}")
-    
-    return Ytomorrow, REG_RMSE, REG_SCORE, accuracy
+    return Ytomorrow_full, REG_RMSE, REG_SCORE, R2, MAE
 
 @robust_model_operation("翌日予測結果保存")
-def save_tomorrow_predictions(config: LightGBMTomorrowConfig, Ytomorrow: pd.DataFrame) -> None:
+def save_tomorrow_predictions(config: LightGBMTomorrowConfig, Ytomorrow: np.ndarray) -> None:
     """翌日予測結果をCSVファイルに保存"""
     y_tomorrow_csv = pd.DataFrame(Ytomorrow, columns=list(config.Y_COLS))
     y_tomorrow_csv.to_csv(config.YTOMORROW_CSV, index=False)
     print(f"予測結果保存完了: {config.YTOMORROW_CSV} ({len(y_tomorrow_csv)}行)")
 
 @robust_model_operation("グラフ生成")
-def generate_prediction_graph(config: LightGBMTomorrowConfig, Ytomorrow: pd.DataFrame, y_test: pd.DataFrame) -> None:
+def generate_prediction_graph(config: LightGBMTomorrowConfig, Ytomorrow: np.ndarray, y_test: pd.DataFrame) -> None:
     """予測結果のグラフを生成"""
     # データフレーム作成
     df_result1 = pd.DataFrame({"Predict[kW]": Ytomorrow.ravel()})
     df_result2 = pd.DataFrame({"Actual[kW]": y_test.ravel()})
     
     # 日時インデックス作成
-    now = datetime.datetime.now()
+    # 明示的に日本時間(JST=UTC+9)を使用してインデックスを作成
+    now = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
     past_days_int = int(config.PAST_DAYS)
     past_days_ago = now - datetime.timedelta(days=past_days_int)
     past_days_ago = past_days_ago.date()
     
     df_result1.index = pd.date_range(start=past_days_ago, periods=len(df_result1), freq='h')
     df_result2.index = pd.date_range(start=past_days_ago, periods=len(df_result2), freq='h')
+    # インデックス名を明示（年月日表示）
+    df_result1.index.name = 'Date'
+    df_result2.index.name = 'Date'
     
     # グラフ描画
     plt.figure(figsize=(16, 9))
@@ -191,7 +222,14 @@ def generate_prediction_graph(config: LightGBMTomorrowConfig, Ytomorrow: pd.Data
     
     filename = os.path.splitext(os.path.basename(config.MODEL_SAV))[0]
     plt.title(filename, fontsize=12)
+    # x軸を年月日で表示
     plt.xlabel('Date', fontsize=12)
+    # x軸は年月日表示とする（回転は行わない）
+    try:
+        ax = plt.gca()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    except Exception:
+        pass
     plt.ylabel('Power [kW]', fontsize=12)
     plt.legend(fontsize=11)
     plt.xticks(fontsize=10)
@@ -225,27 +263,33 @@ def tomorrow(Xtrain_csv, Xtest_csv, Ytrain_csv, Ytest_csv, model_sav, Ypred_csv,
     return execute_tomorrow_prediction(config)
 
 @robust_model_operation("LightGBM翌日予測メイン処理")
-def execute_tomorrow_prediction(config: LightGBMTomorrowConfig) -> Tuple[float, float]:
-    """統一されたLightGBM翌日予測処理"""
-    # 1. 学習データ読み込み・標準化スケーラー作成
-    X_train_scaled, scaler = load_training_data(config)
-    if X_train_scaled is None or scaler is None:
-        return None, None
+def execute_tomorrow_prediction(config: LightGBMTomorrowConfig) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
+    """統一されたLightGBM翌日予測処理
+    
+    Returns:
+        Tuple[RMSE, Score, R2, MAE]
+    """
+    # 1. スケーラー読み込み
+    scaler = load_scaler(config)
+    if scaler is None:
+        return None, None, None, None
     
     # 2. テスト・翌日データ読み込み・標準化
-    y_test, Xtomorrow_scaled = load_test_and_tomorrow_data(config, scaler)
-    if y_test is None or Xtomorrow_scaled is None:
-        return None, None
+    result = load_test_and_tomorrow_data(config, scaler)
+    if result is None:
+        return None, None, None, None
+    y_test, Xtomorrow_scaled = result
     
     # 3. モデル読み込み
     model = load_model(config)
     if model is None:
-        return None, None
+        return None, None, None, None
     
     # 4. 予測実行・精度計算
-    Ytomorrow, REG_RMSE, REG_SCORE, accuracy = predict_with_model(model, Xtomorrow_scaled, y_test)
-    if Ytomorrow is None:
-        return None, None
+    result = predict_with_model(model, Xtomorrow_scaled, y_test)
+    if result is None:
+        return None, None, None, None
+    Ytomorrow, REG_RMSE, REG_SCORE, R2, MAE = result
     
     # 5. 翌日予測結果保存
     save_tomorrow_predictions(config, Ytomorrow)
@@ -253,12 +297,15 @@ def execute_tomorrow_prediction(config: LightGBMTomorrowConfig) -> Tuple[float, 
     # 6. グラフ生成
     generate_prediction_graph(config, Ytomorrow, y_test)
     
-    return REG_RMSE, REG_SCORE
+    return REG_RMSE, REG_SCORE, R2, MAE
 
 if __name__ == "__main__":
     # 設定初期化
     config = LightGBMTomorrowConfig()
-    
+    # 起動時に監査ログとして AI_TARGET_YEARS を出力
+    import os as _os
+    print(f"AI_TARGET_YEARS={_os.environ.get('AI_TARGET_YEARS')}")
+
     print("=" * 60)
     print("LightGBM翌日電力需要予測 開始")
     print("=" * 60)
@@ -266,13 +313,18 @@ if __name__ == "__main__":
     start_time = time.time()
     
     # 翌日予測実行
-    rmse, score = execute_tomorrow_prediction(config)
+    result = execute_tomorrow_prediction(config)
+    if result[0] is None:
+        rmse, score, r2, mae = None, None, None, None
+    else:
+        rmse, score, r2, mae = result
     
     total_time = time.time() - start_time
     
     print("=" * 60)
     print("LightGBM翌日電力需要予測 完了")
-    if rmse is not None and score is not None:
-        print(f"最終結果 - RMSE: {rmse:.2f} kW, スコア: {score:.2f}")
+    if rmse is not None and r2 is not None and mae is not None:
+        # 統一フォーマット（RMSE/R2/MAE）で出力
+        print(f"最終結果 - RMSE: {rmse:.3f} kW, R2: {r2:.4f}, MAE: {mae:.3f} kW")
     print(f"総実行時間: {total_time:.3f}秒")
     print("=" * 60)
