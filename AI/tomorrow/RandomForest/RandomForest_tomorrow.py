@@ -7,7 +7,6 @@
 """
 
 import datetime
-import glob
 import os
 import pickle
 import traceback
@@ -39,23 +38,25 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class RandomForestTomorrowConfig:
     """RandomForest翌日予測設定クラス"""
+    # ベースディレクトリの動的検出
+    _BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
     # 入力データ関連
-    XTRAIN_CSV: str = r"data/Xtrain.csv"
-    XTEST_CSV: str = r"data/Xtest.csv"
-    YTRAIN_CSV: str = r"data/Ytrain.csv"
-    YTEST_CSV: str = r"tomorrow/Ytest.csv"
-    XTOMORROW_CSV: str = r"tomorrow/tomorrow.csv"
+    XTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtrain.csv')
+    XTEST_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtest.csv')
+    YTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Ytrain.csv')
+    YTEST_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'Ytest.csv')
+    XTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'tomorrow.csv')
     
     # モデル関連
-    MODEL_SAV: str = r'train/RandomForest/RandomForest_model.sav'
-    SCALER_PKL: str = r'train/RandomForest/RandomForest_model_scaler.pkl'
+    MODEL_SAV: str = os.path.join(_BASE_DIR, 'train', 'RandomForest', 'RandomForest_model.sav')
     
     # 出力関連
-    YPRED_CSV: str = r'tomorrow/RandomForest/RandomForest_Ypred.csv'
-    YPRED_PNG: str = r'tomorrow/RandomForest/RandomForest_Ypred.png'
-    YPRED_7D_PNG: str = r'tomorrow/RandomForest/RandomForest_Ypred_7d.png'
-    YTOMORROW_CSV: str = r'tomorrow/RandomForest/RandomForest_tomorrow.csv'
-    YTOMORROW_PNG: str = r'tomorrow/RandomForest/RandomForest_tomorrow.png'
+    YPRED_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_Ypred.csv')
+    YPRED_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_Ypred.png')
+    YPRED_7D_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_Ypred_7d.png')
+    YTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_tomorrow.csv')
+    YTOMORROW_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'RandomForest', 'RandomForest_tomorrow.png')
     
     # 設定パラメータ
     PAST_DAYS: int = 7
@@ -118,25 +119,15 @@ def load_training_and_test_data(config: RandomForestTomorrowConfig) -> Tuple[np.
     print(f"データ読み込み完了 - x_train: {x_train.shape}, y_test: {y_test.shape}, x_tomorrow: {x_tomorrow.shape}")
     return x_train, y_test, x_tomorrow
 
-@robust_model_operation("スケーラー読み込み")
-def load_scaler(config: RandomForestTomorrowConfig) -> StandardScaler:
-    """保存済みスケーラーを読み込み"""
-    if not os.path.exists(config.SCALER_PKL):
-        raise FileNotFoundError(f"スケーラーファイルが見つかりません: {config.SCALER_PKL}")
-    
-    with open(config.SCALER_PKL, 'rb') as f:
-        scaler = pickle.load(f)
-    
-    print(f"スケーラー読み込み完了: {config.SCALER_PKL}")
-    return scaler
-
 @robust_model_operation("データ標準化")
-def standardize_data(scaler: StandardScaler, x_tomorrow: np.ndarray) -> np.ndarray:
+def standardize_data(x_train: np.ndarray, x_tomorrow: np.ndarray) -> Tuple[np.ndarray, np.ndarray, StandardScaler]:
     """データの標準化を実行"""
+    scaler = StandardScaler()
+    x_train_scaled = scaler.fit_transform(x_train)
     x_tomorrow_scaled = scaler.transform(x_tomorrow)
     
-    print(f"データ標準化完了 - 翌日データ: {x_tomorrow_scaled.shape}")
-    return x_tomorrow_scaled
+    print(f"データ標準化完了 - 学習データ: {x_train_scaled.shape}, 翌日データ: {x_tomorrow_scaled.shape}")
+    return x_train_scaled, x_tomorrow_scaled, scaler
 
 @robust_model_operation("RandomForestモデル読み込み")
 def load_random_forest_model(config: RandomForestTomorrowConfig):
@@ -153,16 +144,15 @@ def load_random_forest_model(config: RandomForestTomorrowConfig):
 @robust_model_operation("RandomForest予測実行")
 def predict_with_model(model, x_tomorrow: np.ndarray, y_test: np.ndarray) -> np.ndarray:
     """RandomForestモデルを使用して予測を実行"""
-    # x_tomorrowは過去7日分+予測7日分の合計14日分（336時間）
-    # y_testは過去7日分の実測値（168時間）
-    
-    # 全期間の予測（過去7日分+予測7日分）
-    y_tomorrow = model.predict(x_tomorrow)
-    
-    # 安全のため、最小長を使用して精度評価
     min_length = min(len(x_tomorrow), len(y_test))
-    test_accuracy = model.score(x_tomorrow[:min_length], y_test[:min_length])
-    print(f"テスト精度（R²スコア参考値）: {test_accuracy:.3f}")
+    
+    # テスト精度を確認（参考値）
+    if min_length > 0:
+        test_accuracy = model.score(x_tomorrow[:min_length], y_test[:min_length])
+        print(f"テスト精度（R²スコア参考値）: {test_accuracy:.3f}")
+    
+    # 予測実行
+    y_tomorrow = model.predict(x_tomorrow)
     
     print(f"予測完了 - 予測結果形状: {y_tomorrow.shape}")
     return y_tomorrow
@@ -179,16 +169,13 @@ def save_prediction_results(config: RandomForestTomorrowConfig, y_tomorrow: np.n
 
 @robust_model_operation("精度指標計算")
 def calculate_metrics(y_test: np.ndarray, y_tomorrow: np.ndarray) -> Tuple[float, float]:
-    """予測精度指標を計算（統一フォーマット対応）"""
-    # y_tomorrowは過去7日分+予測7日分の合計14日分（336時間）
-    # y_testは過去7日分の実測値（168時間）
-    # 精度評価は過去7日分のみで実施
-    test_length = len(y_test)
-    if test_length == 0:
+    """予測精度指標を計算"""
+    min_length = min(len(y_test), len(y_tomorrow))
+    if min_length == 0:
         raise ValueError("比較するデータがありません")
     
-    y_test_trimmed = y_test
-    y_tomorrow_trimmed = y_tomorrow[:test_length]
+    y_test_trimmed = y_test[:min_length]
+    y_tomorrow_trimmed = y_tomorrow[:min_length]
     
     # RMSE計算
     rmse = mean_squared_error(y_test_trimmed, y_tomorrow_trimmed, squared=False)
@@ -196,17 +183,7 @@ def calculate_metrics(y_test: np.ndarray, y_tomorrow: np.ndarray) -> Tuple[float
     # R²スコア計算
     r2_score_value = r2_score(y_test_trimmed, y_tomorrow_trimmed)
     
-    # MAE計算（ダッシュボード抽出用統一フォーマット）
-    try:
-        from sklearn.metrics import mean_absolute_error
-        mae = mean_absolute_error(y_test_trimmed, y_tomorrow_trimmed)
-    except Exception:
-        import numpy as _np
-        mae = float(_np.mean(_np.abs(y_test_trimmed - y_tomorrow_trimmed)))
-    
-    # 統一フォーマットで出力（ダッシュボード extractMetric が確実に抽出できる）
-    print(f"最終結果 - RMSE: {rmse:.3f} kW, R2スコア: {r2_score_value:.4f}, MAE: {mae:.3f} kW")
-    
+    print(f"RMSE: {rmse:.2f} kW, R²スコア: {r2_score_value:.3f}")
     return rmse, r2_score_value
 
 @robust_model_operation("グラフ生成")
@@ -214,27 +191,23 @@ def create_prediction_visualization(config: RandomForestTomorrowConfig, y_test: 
     """予測結果の可視化グラフを作成"""
     os.makedirs(os.path.dirname(config.YTOMORROW_PNG), exist_ok=True)
     
+    min_length = min(len(y_test), len(y_tomorrow))
+    
     # データフレームに変換
     df_result1 = pd.DataFrame({"Predict[kW]": y_tomorrow.ravel()})
     df_result2 = pd.DataFrame({"Actual[kW]": y_test.ravel()})
     
     # 日時インデックス設定
-    # JSTを明示してインデックスを作成（UTC->JST）
-    jst_now = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
-    past_days_ago = (jst_now - datetime.timedelta(days=config.PAST_DAYS)).date()
+    now = datetime.datetime.now()
+    past_days_ago = (now - datetime.timedelta(days=config.PAST_DAYS)).date()
     
     df_result1.index = pd.date_range(start=past_days_ago, periods=len(df_result1), freq='h')
     df_result2.index = pd.date_range(start=past_days_ago, periods=len(df_result2), freq='h')
-    # インデックス名を明示（年月日表示、回転は行わない）
-    df_result1.index.name = 'Date'
-    df_result2.index.name = 'Date'
     
     # グラフ描画
     plt.figure(figsize=(16, 9))
     plt.plot(df_result1.index, df_result1['Predict[kW]'], label='Predict[kW]')
-    # 実測値は過去7日分のみ表示
-    test_length = len(y_test)
-    plt.plot(df_result2.index[:test_length], df_result2['Actual[kW]'][:test_length], label='Actual[kW]')
+    plt.plot(df_result2.index[:min_length], df_result2['Actual[kW]'][:min_length], label='Actual[kW]')
     
     # タイトル設定
     model_name = os.path.splitext(os.path.basename(config.MODEL_SAV))[0]
@@ -298,22 +271,17 @@ def execute_tomorrow_prediction(config: RandomForestTomorrowConfig) -> Optional[
     if x_train is None or y_test is None or x_tomorrow is None:
         return None, None
     
-    # 2. スケーラー読み込み
-    scaler = load_scaler(config)
-    if scaler is None:
+    # 2. データ標準化
+    x_train_scaled, x_tomorrow_scaled, scaler = standardize_data(x_train, x_tomorrow)
+    if x_train_scaled is None or x_tomorrow_scaled is None:
         return None, None
     
-    # 3. データ標準化
-    x_tomorrow_scaled = standardize_data(scaler, x_tomorrow)
-    if x_tomorrow_scaled is None:
-        return None, None
-    
-    # 4. モデル読み込み
+    # 3. モデル読み込み
     model = load_random_forest_model(config)
     if model is None:
         return None, None
     
-    # 5. 予測実行
+    # 4. 予測実行
     y_tomorrow = predict_with_model(model, x_tomorrow_scaled, y_test)
     if y_tomorrow is None:
         return None, None
@@ -335,10 +303,7 @@ def execute_tomorrow_prediction(config: RandomForestTomorrowConfig) -> Optional[
 if __name__ == "__main__":
     # 設定初期化
     config = RandomForestTomorrowConfig()
-    # 起動時に監査ログとして AI_TARGET_YEARS を出力
-    import os as _os
-    print(f"AI_TARGET_YEARS={_os.environ.get('AI_TARGET_YEARS')}")
-
+    
     print("=" * 60)
     print("RandomForest翌日電力需要予測 開始")
     print("=" * 60)
@@ -354,8 +319,7 @@ if __name__ == "__main__":
     print("RandomForest翌日電力需要予測 完了")
     if result is not None and result != (None, None):
         rmse, r2_score_value = result
-        # 統一フォーマット出力は既に calculate_metrics 内で行われているため、ここでは簡略表示
-        print(f"(簡略表示) RMSE: {rmse:.2f} kW, R2スコア: {r2_score_value:.3f}")
+        print(f"最終結果 - RMSE: {rmse:.2f} kW, R²スコア: {r2_score_value:.3f}")
     else:
         print("予測処理が失敗しました")
     print(f"総実行時間: {total_time:.3f}秒")

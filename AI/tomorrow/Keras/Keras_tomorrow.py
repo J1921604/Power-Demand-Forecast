@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 from typing import Tuple, Any
 from dataclasses import dataclass
 from functools import wraps
-import glob
 import warnings
 
 import pandas as pd
@@ -23,7 +22,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.metrics import mean_squared_error
 import traceback
 
 # パフォーマンス監視
@@ -75,7 +74,7 @@ except ImportError:
 class KerasTomorrowConfig:
     """Keras 翌日予測システム統一設定クラス"""
     
-    # プロジェクト基本設定
+    # プロジェクト基本設定（動的パス）
     PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     DATA_DIR: str = os.path.join(PROJECT_ROOT, 'data')
     TOMORROW_DIR: str = os.path.join(PROJECT_ROOT, 'tomorrow')
@@ -100,8 +99,6 @@ class KerasTomorrowConfig:
     GC_THRESHOLD: int = 100
     RANDOM_SEED: int = 42
     FLOAT_PRECISION: type = np.float32
-    PAST_DAYS: int = 7  # 精度計算対象の過去日数
-    FORECAST_DAYS: int = 7
     
     # 可視化設定
     FIGURE_SIZE: Tuple[float, float] = (14.4, 8.1)  # 16:9
@@ -124,14 +121,12 @@ def robust_model_operation(func):
             result = func(*args, **kwargs)
             
             execution_time = time.time() - start_time
-            # Use ASCII markers to avoid encoding issues on Windows consoles (cp932)
-            print(f"[OK] {stage} 実行時間: {execution_time:.3f}秒")
+            print(f"✓ {stage} 実行時間: {execution_time:.3f}秒")
             
             return result
             
         except Exception as e:
-            # Use ASCII marker instead of a Unicode cross mark to avoid encoding errors
-            print(f"[ERROR] {func.__name__} でエラー発生: {e}")
+            print(f"❌ {func.__name__} でエラー発生: {e}")
             traceback.print_exc()
             raise
     return wrapper
@@ -144,20 +139,6 @@ X_COLS: list = ["MONTH", "WEEK", "HOUR", "TEMP"]
 
 # 出力に使用するデータ列の指定
 Y_COLS: list = ["KW"]
-
-
-def enforce_window_length(y_values: np.ndarray, expected_rows: int, label: str) -> np.ndarray:
-    """テストラベル行数を強制的に揃えるガード処理"""
-    actual_rows = y_values.shape[0]
-    if actual_rows == expected_rows:
-        print(f"[OK] {label} 行数: {actual_rows}行 (期待値 {expected_rows}行)")
-        return y_values
-
-    if actual_rows > expected_rows:
-        print(f"[WARN] {label} 行数が {actual_rows} 行 → 末尾 {expected_rows} 行のみ使用します")
-        return y_values[-expected_rows:]
-
-    raise ValueError(f"{label} 行数が不足しています: {actual_rows} 行 (期待値 {expected_rows} 行)")
 
 # パフォーマンス監視関数
 def monitor_memory_usage(stage: str) -> float:
@@ -185,7 +166,7 @@ def load_training_data(xtrain_path: str, xtest_path: str, ytrain_path: str) -> T
         読み込んだ訓練データ、テストデータ、訓練ラベルのタプル
         
     Raises:
-        FileNotFoundError: ファイルが見つかりません場合
+        FileNotFoundError: ファイルが見つからない場合
         Exception: データ読み込み時のエラー
     """
     try:
@@ -197,12 +178,6 @@ def load_training_data(xtrain_path: str, xtest_path: str, ytrain_path: str) -> T
         
         print(f"テストデータを読み込んでいます: {xtest_path}")
         xtest = pd.read_csv(xtest_path).values.astype('float32')  # メモリ効率化
-        
-        # tomorrow予測では、Xtestの最後168行(最新7日分)のみ使用
-        expected_rows = config.PAST_DAYS * 24
-        if len(xtest) > expected_rows:
-            print(f"[INFO] Xtest {len(xtest)}行のうち最後{expected_rows}行(最新7日分)を使用")
-            xtest = xtest[-expected_rows:]
         
         print(f"ラベルデータを読み込んでいます: {ytrain_path}")
         ytrain = pd.read_csv(ytrain_path).values.astype('float32')  # メモリ効率化
@@ -246,12 +221,6 @@ def load_test_and_tomorrow_data(ytest_path: str, xtomorrow_path: str) -> Tuple[n
         
         print(f"テストラベルを読み込んでいます: {ytest_path}")
         ytest = pd.read_csv(ytest_path).values.astype('float32')  # メモリ効率化
-
-        expected_rows = config.PAST_DAYS * 24
-        ytest = enforce_window_length(ytest, expected_rows, "Ytest")
-        
-        # Ytestの統計情報を出力（デバッグ用）
-        print(f"[DEBUG] Ytest統計: 平均={ytest.mean():.2f}, 標準偏差={ytest.std():.2f}, 最小={ytest.min():.2f}, 最大={ytest.max():.2f}, 先頭5件={ytest[:5].flatten().tolist()}")
         
         print(f"明日予測用データを読み込んでいます: {xtomorrow_path}")
         xtomorrow = pd.read_csv(xtomorrow_path).values.astype('float32')  # メモリ効率化
@@ -333,7 +302,7 @@ def load_scaler_and_model(model_path: str) -> Tuple[StandardScaler, object]:
 
 
 @robust_model_operation
-def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray, xtomorrow: np.ndarray, y_scaler: object = None) -> Tuple[np.ndarray, np.ndarray]:
+def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray, xtomorrow: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     学習済みモデルで予測を実行（パフォーマンス最適化・堅牢版）
     
@@ -371,14 +340,14 @@ def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray,
                 ypred = model(xtest_scaled)
             else:
                 raise AttributeError("モデルに予測機能がありません")
-
+                
             # 型変換
             if hasattr(ypred, 'numpy'):
                 ypred = ypred.numpy()
             ypred = np.array(ypred, dtype=np.float32)
-
+            
         except Exception as e:
-            print(f"[WARN] テストデータ予測でエラー: {e}")
+            print(f"⚠️ テストデータ予測でエラー: {e}")
             # フォールバック予測
             ypred = np.mean(xtest, axis=1, keepdims=True).astype(np.float32) * 1000
             print("フォールバック予測を使用します")
@@ -399,45 +368,10 @@ def predict_with_model(model: object, scaler: StandardScaler, xtest: np.ndarray,
             ytomorrow_pred = np.array(ytomorrow_pred, dtype=np.float32)
             
         except Exception as e:
-            print(f"[WARN] 翌日データ予測でエラー: {e}")
+            print(f"⚠️ 翌日データ予測でエラー: {e}")
             # フォールバック予測
             ytomorrow_pred = np.mean(xtomorrow, axis=1, keepdims=True).astype(np.float32) * 1000
             print("フォールバック予測を使用します")
-        
-        # Keras特有の問題修正: 予測値スケール調整
-        # y_scalerがある場合は自動スケール調整をスキップ
-        if y_scaler is not None:
-            print("y_scalerが利用可能 - 自動スケール調整をスキップ")
-            # y_scalerで逆変換を適用
-            try:
-                ypred = y_scaler.inverse_transform(ypred.reshape(-1, 1))
-                ytomorrow_pred = y_scaler.inverse_transform(ytomorrow_pred.reshape(-1, 1))
-                print("y_scalerで逆変換を適用しました")
-            except Exception as e:
-                print(f"[WARN] y_scaler逆変換失敗: {e}")
-                # フォールバック: 手動スケール調整
-                scale_factor = 3000.0
-                offset = 2500.0
-                ypred = ypred * scale_factor + offset
-                ytomorrow_pred = ytomorrow_pred * scale_factor + offset
-        else:
-            # Kerasモデルの出力が標準化されている場合の対処
-            print("y_scalerなし - 自動スケール調整を実行")
-            
-            # 予測値の範囲チェック（正常な電力需要は1000-4000kW程度）
-            if np.mean(np.abs(ypred)) < 10:  # 標準化された値の場合
-                print("標準化された予測値を検出、スケール調整を実行")
-                # 訓練データから推定されるスケール調整
-                scale_factor = 3000.0  # 平均的な電力需要レベル
-                offset = 2500.0  # ベースライン電力需要
-                ypred = ypred * scale_factor + offset
-                ytomorrow_pred = ytomorrow_pred * scale_factor + offset
-                print(f"スケール調整完了: scale_factor={scale_factor}, offset={offset}")
-        
-        # 予測値の妥当性チェック
-        ypred = np.clip(ypred, 1000, 5000)  # 物理的に妥当な範囲に制限
-        ytomorrow_pred = np.clip(ytomorrow_pred, 1000, 5000)
-        print(f"予測値範囲調整完了: テスト予測 {np.min(ypred):.0f}-{np.max(ypred):.0f}kW, 翌日予測 {np.min(ytomorrow_pred):.0f}-{np.max(ytomorrow_pred):.0f}kW")
         
         # メモリクリーンアップ
         del xtest_scaled, xtomorrow_scaled
@@ -531,43 +465,33 @@ def calculate_evaluation_metrics(ypred: np.ndarray, ytest: np.ndarray) -> Tuple[
         # 形状チェックと修正
         print(f"ypred形状: {ypred.shape}, ytest形状: {ytest.shape}")
         
-        # [DEBUG] 予測値とテスト値の統計を出力
-        print(f"[DEBUG] ypred統計: 平均={ypred.mean():.2f}, 標準偏差={ypred.std():.2f}, 最小={ypred.min():.2f}, 最大={ypred.max():.2f}")
-        print(f"[DEBUG] ytest統計: 平均={ytest.mean():.2f}, 標準偏差={ytest.std():.2f}, 最小={ytest.min():.2f}, 最大={ytest.max():.2f}")
-        
         # 形状が異なる場合は適切にリサイズ
-        # ypredは過去7日分+予測7日分の合計14日分（336時間）
-        # ytestは過去7日分の実測値（168時間）
-        # 精度評価は過去7日分のみで実施
-        
-        # 安全のため、最小長を使用して精度評価
-        min_length = min(len(ypred), len(ytest))
-        ypred_eval = ypred[:min_length]
-        ytest_eval = ytest[:min_length]
-        
         if ypred.shape != ytest.shape:
-            print(f"[INFO] ypred{ypred.shape}とytest{ytest.shape}の形状が異なります - min_length={min_length}を使用")
+            print(f"⚠️ 形状不一致を検出: ypred{ypred.shape} vs ytest{ytest.shape}")
+            
+            # ytestの行数に合わせてypredを調整
+            if ypred.shape[0] > ytest.shape[0]:
+                # ypredが大きい場合は末尾部分を使用（最新データ）
+                ypred = ypred[-ytest.shape[0]:]
+                print(f"✅ ypredを調整: {ypred.shape}")
+            elif ypred.shape[0] < ytest.shape[0]:
+                # ypredが小さい場合はytestを調整
+                ytest = ytest[-ypred.shape[0]:]
+                print(f"✅ ytestを調整: {ytest.shape}")
         
         # RMSE計算（メモリ効率化）
-        rmse = np.sqrt(np.mean((ypred_eval - ytest_eval) ** 2))
+        rmse = np.sqrt(np.mean((ypred - ytest) ** 2))
         
         # R²スコア計算（メモリ効率化）
-        ss_res = np.sum((ytest_eval - ypred_eval) ** 2)
-        ss_tot = np.sum((ytest_eval - np.mean(ytest_eval)) ** 2)
+        ss_res = np.sum((ytest - ypred) ** 2)
+        ss_tot = np.sum((ytest - np.mean(ytest)) ** 2)
         r2_score = 1 - (ss_res / ss_tot)
-        
-        # MAE計算（ダッシュボード抽出用統一フォーマット）
-        try:
-            mae = mean_absolute_error(ytest_eval, ypred_eval)
-        except Exception:
-            mae = float(np.mean(np.abs(ypred_eval - ytest_eval)))
         
         elapsed_time = time.time() - start_time
         print(f"評価指標計算完了 (実行時間: {elapsed_time:.3f}秒)")
+        print(f"RMSE: {rmse:.2f}")
+        print(f"R² Score: {r2_score:.4f}")
         
-        # 統一フォーマットで出力（ダッシュボード extractMetric が確実に抽出できる）
-        print(f"最終結果 - RMSE: {rmse:.3f} kW, R2スコア: {r2_score:.4f}, MAE: {mae:.3f} kW")
-
         return rmse, r2_score
         
     except Exception as e:
@@ -601,9 +525,9 @@ def load_model_and_scaler(model_path: str) -> Tuple[Any, Any]:
             try:
                 with open(scaler_path, 'rb') as f:
                     scaler = pickle.load(f)
-                print(f"[OK] スケーラー読み込み成功: {type(scaler)}")
+                print(f"✅ スケーラー読み込み成功: {type(scaler)}")
             except Exception as e:
-                print(f"[WARN] スケーラー読み込み失敗: {e}")
+                print(f"⚠️ スケーラー読み込み失敗: {e}")
         
         # モデル読み込み（複数手法で試行）
         keras_model = None
@@ -612,19 +536,19 @@ def load_model_and_scaler(model_path: str) -> Tuple[Any, Any]:
         if TENSORFLOW_AVAILABLE and os.path.exists(h5_model_path):
             try:
                 import tensorflow as tf
-
+                
                 # メモリクリア
                 tf.keras.backend.clear_session()
-
+                
                 # カスタム読み込み設定
                 keras_model = tf.keras.models.load_model(
                     h5_model_path,
                     compile=False  # コンパイルをスキップして問題を回避
                 )
-                print("[OK] H5モデル読み込み成功（手法1）")
-
+                print(f"✅ H5モデル読み込み成功（手法1）")
+                
             except Exception as e:
-                print(f"[WARN] H5モデル読み込み失敗（手法1）: {e}")
+                print(f"⚠️ H5モデル読み込み失敗（手法1）: {e}")
         
         # 手法2: SAVファイルからの部分読み込み
         if keras_model is None and os.path.exists(model_path):
@@ -649,17 +573,17 @@ def load_model_and_scaler(model_path: str) -> Tuple[Any, Any]:
                         keras_model, loaded_scaler = model_data[0], model_data[1]
                         if scaler is None:
                             scaler = loaded_scaler
-                        print("[OK] SAVファイルから両方読み込み成功（手法2）")
+                        print("✅ SAVファイルから両方読み込み成功（手法2）")
                     else:
                         keras_model = model_data
-                        print("[OK] SAVファイルからモデル読み込み成功（手法2）")
+                        print("✅ SAVファイルからモデル読み込み成功（手法2）")
                         
             except Exception as e:
                 print(f"⚠️ SAVファイル読み込み失敗（手法2）: {e}")
         
         # 手法3: ダミーモデル（最終手段）
         if keras_model is None:
-            print("[WARN] 警告: 実際のモデルを読み込めませんでした。ダミーモデルで代替します。")
+            print("⚠️ 警告: 実際のモデルを読み込めませんでした。ダミーモデルで代替します。")
             
             # ダミーモデルクラス
             class DummyModel:
@@ -674,17 +598,17 @@ def load_model_and_scaler(model_path: str) -> Tuple[Any, Any]:
                     return [0.5, 0.7]  # ダミー精度
             
             keras_model = DummyModel()
-            print("[OK] ダミーモデル作成完了（手法3）")
+            print("✅ ダミーモデル作成完了（手法3）")
         
         # スケーラーの最終確認
         if scaler is None:
-            print("[WARN] スケーラーが見つかりません。デフォルトスケーラーを作成します。")
+            print("⚠️ スケーラーが見つかりません。デフォルトスケーラーを作成します。")
             from sklearn.preprocessing import StandardScaler
             scaler = StandardScaler()
             # ダミーフィット（実際のデータでフィットされていることを想定）
             scaler.mean_ = np.zeros(10)  # 仮の特徴量数
             scaler.scale_ = np.ones(10)
-            print("[OK] デフォルトスケーラー作成完了")
+            print("✅ デフォルトスケーラー作成完了")
         
         elapsed_time = time.time() - start_time
         monitor_memory_usage("モデル読み込み完了")
@@ -692,27 +616,10 @@ def load_model_and_scaler(model_path: str) -> Tuple[Any, Any]:
         print(f"モデルタイプ: {type(keras_model)}")
         print(f"スケーラータイプ: {type(scaler)}")
         
-        # 追加: yスケーラの検出と読み込み（学習時に保存されることを期待）
-        y_scaler = None
-        try:
-            # 探索パターン: 同ディレクトリ内に '*y_scaler*.pkl' が作成されている可能性がある
-            y_candidates = glob.glob(os.path.join(model_dir, '*y_scaler*.pkl'))
-            if y_candidates:
-                y_path = sorted(y_candidates)[-1]
-                try:
-                    with open(y_path, 'rb') as yf:
-                        y_scaler = pickle.load(yf)
-                    print(f"[OK] yスケーラー読み込み成功: {y_path}")
-                except Exception as _e:
-                    print(f"[WARN] yスケーラー読み込み失敗: {_e}")
-        except Exception:
-            pass
-
-        return keras_model, scaler, y_scaler
+        return keras_model, scaler
         
     except Exception as e:
         print(f"エラー: モデル読み込みで重大なエラーが発生しました: {e}")
-        raise
         raise
 
 
@@ -747,34 +654,29 @@ def create_prediction_visualization(ypred: np.ndarray, ytest: np.ndarray, ytomor
         if not font_set:
             print("警告: 日本語フォントが見つかりません。英語表示になります。")
         
-        # ytomorrow_predは過去7日分+予測7日分の合計14日分（336時間）
-        # ytestは過去7日分の実測値（168時間）
-        test_length = len(ytest)
+        # 少ないデータ数に合わせる
+        min_length = min(len(ytomorrow_pred), len(ytest))
         
         # データを1次元に変換
         ytomorrow_flat = ytomorrow_pred.ravel()
         ytest_flat = ytest.ravel()
         
-        # 過去past_days日前から開始する時系列インデックス（JSTを明示）
-        # サーバがUTCで動作している可能性を考慮し、明示的にUTC->JST変換を行う
-        jst_now = datetime.utcnow() + timedelta(hours=9)
-        start_date = (jst_now - timedelta(days=int(past_days))).date()
+        # 過去past_days日前から開始する時系列インデックス（copyファイルと同じ）
+        start_date = (datetime.now() - timedelta(days=int(past_days))).date()
         idx = pd.date_range(start=pd.Timestamp(start_date), periods=len(ytomorrow_flat), freq="h")
-
+        
         # 予測データのDataFrame
         df_pred = pd.DataFrame({"Predict[kW]": ytomorrow_flat}, index=idx)
-        # インデックス名を明示（年月日表示）
-        df_pred.index.name = 'Date'
-
+        
         # グラフ描画
         plt.figure(figsize=(16, 9))
         
         # 予測データをプロット（他のモデルと同じ形式）
         plt.plot(df_pred, label="Predict[kW]")
         
-        # 実際のデータがあれば重ねて表示（過去7日分のみ）
-        if test_length > 0:
-            df_act = pd.DataFrame({"Actual[kW]": ytest_flat[:test_length]}, index=idx[:test_length])
+        # 実際のデータがあれば重ねて表示
+        if min_length > 0:
+            df_act = pd.DataFrame({"Actual[kW]": ytest_flat[:min_length]}, index=idx[:min_length])
             plt.plot(df_act, label="Actual[kW]")
         
         # ファイルパスから拡張子を除くファイル名を取得
@@ -782,14 +684,7 @@ def create_prediction_visualization(ypred: np.ndarray, ytest: np.ndarray, ytomor
         
         # グラフのタイトルにファイル名を設定
         plt.title(filename, fontsize=12)
-        # x軸を年月日で表示
         plt.xlabel("Date", fontsize=12)
-        # x軸は年月日表示とする（回転は行わない）
-        try:
-            ax = plt.gca()
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-        except Exception:
-            pass
         plt.ylabel("Power [kW]", fontsize=12)
         plt.legend(fontsize=11)
         plt.xticks(fontsize=10)
@@ -849,18 +744,13 @@ def tomorrow(
         
         # モデルとスケーラーのロード（メモリ効率化）
         print("訓練済みモデルとスケーラーを読み込んでいます...")
-        keras_info, scaler, y_scaler = load_model_and_scaler(model_sav)
+        keras_info, scaler = load_model_and_scaler(model_sav)
         
         # メモリ監視
         monitor_memory_usage("モデル読み込み完了")
         
         # 予測の実行（メモリ効率化）
-        # Xtomorrow全体(過去7日+未来7日)を使って予測
-        Ypred, Ytomorrow_pred = predict_with_model(keras_info, scaler, Xtest, Xtomorrow, y_scaler)
-
-        # もし y_scaler があれば逆変換は既に適用済み
-        if y_scaler is None:
-            print("[INFO] y_scalerなし - 手動スケール調整を使用")
+        Ypred, Ytomorrow_pred = predict_with_model(keras_info, scaler, Xtest, Xtomorrow)
         
         # データ型最適化（float32変換）
         Ypred = Ypred.astype(np.float32)
@@ -869,11 +759,8 @@ def tomorrow(
         # メモリ監視
         monitor_memory_usage("予測完了")
         
-        # 評価指標の計算（明日予測の先頭past_days日分 と実測 Ytest を比較）
-        # tomorrow.csvは past_days + forecast_days 分のデータを含むため、
-        # 評価用には過去past_days分(Ytestと同じ期間)のみを使用
-        print(f"[INFO] 評価計算: Ytomorrow_pred {len(Ytomorrow_pred)}行のうち先頭{len(Ytest)}行を使用")
-        rmse, r2_score = calculate_evaluation_metrics(Ytomorrow_pred[:len(Ytest)], Ytest)
+        # 評価指標の計算
+        rmse, r2_score = calculate_evaluation_metrics(Ytest, Ypred)
         
         # 予測結果の保存（最適化版）
         save_tomorrow_predictions(Ytomorrow_pred, ytomorrow_csv)
@@ -893,8 +780,8 @@ def tomorrow(
             print(f"メモリ効率化: {memory_saved:.1f}MB削減")
         
         print(f"明日の電力需要予測が完了しました: {ytomorrow_csv}")
-        print(f"R2 Score: {r2_score:.4f}")
-
+        print(f"R² Score: {r2_score:.4f}")
+        
         return rmse, r2_score
         
     except Exception as e:
@@ -963,8 +850,8 @@ def main() -> None:
             print(f"メモリ使用量変化: {memory_delta:+.1f}MB (開始: {start_memory:.1f}MB → 終了: {end_memory:.1f}MB)")
         
         print("=== 処理完了 ===")
-        # 統一フォーマット出力は既に tomorrow() 内で行われているため、ここでは簡略表示
-        print(f"(簡略表示) RMSE: {rmse:.3f} kW, R2スコア: {r2_score:.4f}")
+        print(f"RMSE: {rmse:.2f}")
+        print(f"R² Score: {r2_score:.4f}")
         print(f"実行時間: {elapsed_time:.3f}秒")
         print(f"出力ファイル: {YTOMORROW_CSV}")
         
@@ -977,8 +864,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # 起動時に監査ログとして AI_TARGET_YEARS を出力
-    print(f"AI_TARGET_YEARS={os.environ.get('AI_TARGET_YEARS')}")
     print("=== Keras Tomorrow プログラム開始 ===")
     try:
         main()

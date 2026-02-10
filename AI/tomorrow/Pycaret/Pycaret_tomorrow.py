@@ -7,7 +7,6 @@
 """
 
 import datetime
-import glob
 import os
 import traceback
 import time
@@ -38,22 +37,25 @@ plt.rcParams['axes.linewidth'] = 0.8
 @dataclass
 class PycaretTomorrowConfig:
     """Pycaret翌日予測設定クラス"""
+    # ベースディレクトリの動的検出
+    _BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    
     # 入力データ関連
-    XTRAIN_CSV: str = r"data/Xtrain.csv"
-    XTEST_CSV: str = r"data/Xtest.csv"
-    YTRAIN_CSV: str = r"data/Ytrain.csv"
-    YTEST_CSV: str = r"tomorrow/Ytest.csv"
-    XTOMORROW_CSV: str = r"tomorrow/tomorrow.csv"
+    XTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtrain.csv')
+    XTEST_CSV: str = os.path.join(_BASE_DIR, 'data', 'Xtest.csv')
+    YTRAIN_CSV: str = os.path.join(_BASE_DIR, 'data', 'Ytrain.csv')
+    YTEST_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'Ytest.csv')
+    XTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'tomorrow.csv')
     
     # モデル関連
-    MODEL_SAV: str = r'train/Pycaret/Pycaret_model'
+    MODEL_SAV: str = os.path.join(_BASE_DIR, 'train', 'Pycaret', 'Pycaret_model')
     
     # 出力関連
-    YPRED_CSV: str = r'tomorrow/Pycaret/Pycaret_Ypred.csv'
-    YPRED_PNG: str = r'tomorrow/Pycaret/Pycaret_Ypred.png'
-    YPRED_7D_PNG: str = r'tomorrow/Pycaret/Pycaret_Ypred_7d.png'
-    YTOMORROW_CSV: str = r'tomorrow/Pycaret/Pycaret_tomorrow.csv'
-    YTOMORROW_PNG: str = r'tomorrow/Pycaret/Pycaret_tomorrow.png'
+    YPRED_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'Pycaret', 'Pycaret_Ypred.csv')
+    YPRED_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'Pycaret', 'Pycaret_Ypred.png')
+    YPRED_7D_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'Pycaret', 'Pycaret_Ypred_7d.png')
+    YTOMORROW_CSV: str = os.path.join(_BASE_DIR, 'tomorrow', 'Pycaret', 'Pycaret_tomorrow.csv')
+    YTOMORROW_PNG: str = os.path.join(_BASE_DIR, 'tomorrow', 'Pycaret', 'Pycaret_tomorrow.png')
     
     # 設定パラメータ
     PAST_DAYS: int = 7
@@ -156,12 +158,7 @@ def save_prediction_results(config: PycaretTomorrowConfig, y_tomorrow: np.ndarra
 
 @robust_model_operation("精度指標計算")
 def calculate_metrics(y_test: np.ndarray, y_tomorrow: np.ndarray) -> Tuple[float, float]:
-    """予測精度指標を計算（統一フォーマット対応）"""
-    # y_tomorrowは過去7日分+予測7日分の合計14日分（336時間）
-    # y_testは過去7日分の実測値（168時間）
-    # 精度評価は過去7日分のみで実施
-    
-    # 安全のため、最小長を使用して精度評価
+    """予測精度指標を計算"""
     min_length = min(len(y_test), len(y_tomorrow))
     if min_length == 0:
         raise ValueError("比較するデータがありません")
@@ -175,17 +172,7 @@ def calculate_metrics(y_test: np.ndarray, y_tomorrow: np.ndarray) -> Tuple[float
     # R²スコア計算
     r2_score_value = r2_score(y_test_trimmed, y_tomorrow_trimmed)
     
-    # MAE計算（ダッシュボード抽出用統一フォーマット）
-    try:
-        from sklearn.metrics import mean_absolute_error
-        mae = mean_absolute_error(y_test_trimmed, y_tomorrow_trimmed)
-    except Exception:
-        import numpy as _np
-        mae = float(_np.mean(_np.abs(y_test_trimmed - y_tomorrow_trimmed)))
-    
-    # 統一フォーマットで出力（ダッシュボード extractMetric が確実に抽出できる）
-    print(f"最終結果 - RMSE: {rmse:.3f} kW, R2スコア: {r2_score_value:.4f}, MAE: {mae:.3f} kW")
-    
+    print(f"RMSE: {rmse:.2f} kW, R²スコア: {r2_score_value:.3f}")
     return rmse, r2_score_value
 
 @robust_model_operation("グラフ生成")
@@ -200,39 +187,24 @@ def create_prediction_visualization(config: PycaretTomorrowConfig, y_test: np.nd
     df_result2 = pd.DataFrame({"Actual[kW]": y_test.ravel()})
     
     # 日時インデックス設定
-    # JST (UTC+9) を明示して日付インデックスを作成
-    jst_now = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
-    past_days_ago = (jst_now - datetime.timedelta(days=config.PAST_DAYS)).date()
+    now = datetime.datetime.now()
+    past_days_ago = (now - datetime.timedelta(days=config.PAST_DAYS)).date()
     
-    # 他モデルと同一ロジックに揃える（freq='h' を使用）
-    df_result1.index = pd.date_range(start=past_days_ago, periods=len(df_result1), freq='h')
-    df_result2.index = pd.date_range(start=past_days_ago, periods=len(df_result2), freq='h')
-    # インデックス名を明示（年月日表示）
-    df_result1.index.name = 'Date'
-    df_result2.index.name = 'Date'
+    df_result1.index = pd.date_range(start=past_days_ago, periods=len(df_result1), freq='H')
+    df_result2.index = pd.date_range(start=past_days_ago, periods=len(df_result2), freq='H')
     
     # グラフ描画
     plt.figure(figsize=(16, 9))
     plt.plot(df_result1.index, df_result1['Predict[kW]'], label='Predict[kW]')
-    # 実測値は過去7日分のみ表示
-    test_length = len(y_test)
-    plt.plot(df_result2.index[:test_length], df_result2['Actual[kW]'][:test_length], label='Actual[kW]')
+    plt.plot(df_result2.index[:min_length], df_result2['Actual[kW]'][:min_length], label='Actual[kW]')
     
     # タイトル設定
     model_name = os.path.splitext(os.path.basename(config.MODEL_SAV))[0]
     plt.title(model_name, fontsize=12)
-    # x軸は年月日で表示
     plt.xlabel('Date', fontsize=12)
-    # 他モデルと同様の挙動に合わせ、DateFormatterは使用せず標準のxticksを用いる
     plt.ylabel('Power [kW]', fontsize=12)
     plt.legend(fontsize=11)
     plt.xticks(fontsize=10)
-    # 明示的に回転をゼロにして、どの環境でも縦回転が入らないようにする
-    try:
-        ax = plt.gca()
-        ax.tick_params(axis='x', labelrotation=0)
-    except Exception:
-        pass
     plt.yticks(fontsize=10)
     plt.tight_layout()
     
@@ -316,10 +288,6 @@ if __name__ == "__main__":
     # 設定初期化
     config = PycaretTomorrowConfig()
     
-    # 起動時に監査ログとして AI_TARGET_YEARS を出力
-    import os as _os
-    print(f"AI_TARGET_YEARS={_os.environ.get('AI_TARGET_YEARS')}")
-
     print("=" * 60)
     print("Pycaret翌日電力需要予測 開始")
     print("=" * 60)
@@ -335,8 +303,7 @@ if __name__ == "__main__":
     print("Pycaret翌日電力需要予測 完了")
     if result is not None and result != (None, None):
         rmse, r2_score_value = result
-        # 統一フォーマット出力は既に calculate_metrics 内で行われているため、ここでは簡略表示
-        print(f"(簡略表示) RMSE: {rmse:.2f} kW, R2スコア: {r2_score_value:.3f}")
+        print(f"最終結果 - RMSE: {rmse:.2f} kW, R²スコア: {r2_score_value:.3f}")
     else:
         print("予測処理が失敗しました")
     print(f"総実行時間: {total_time:.3f}秒")
