@@ -254,7 +254,7 @@ py -3.10 -m pip install -r requirements.txt
 py -3.10 -m venv .venv
 
 # 仮想環境有効化
-.\.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 
 # 依存パッケージインストール
 cd AI
@@ -720,12 +720,14 @@ Get-ChildItem -Recurse -Filter *.png AI/tomorrow/
 
 **確認**:
 
-- `AI/data/juyo-2026.csv` が **日時昇順**（00:00→01:00→02:00）で並んでいるか
+- `AI/tomorrow/data.py` の **最新データ取得** で `juyo-2026.csv` が **日時型で昇順ソート** され、`DATE/TIME` が **ゼロパディング（例: 2026/02/01, 00:00）** されているか
+- **同一日時の重複行** が **最新優先で1行のみ** 残っているか
 - `AI/data/data.py` で **日時インデックスのソート** と **重複時刻の除去** が実施されているか
 
 **対処**:
 
 - 対象CSVの並びを修正後、`py -3.10 data/data.py` を再実行
+- 最新データ取得をやり直す場合は `py -3.10 tomorrow/data.py` を再実行
 
 ---
 

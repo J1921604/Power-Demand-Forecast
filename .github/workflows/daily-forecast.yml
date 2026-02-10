@@ -38,6 +38,7 @@ jobs:
     env:
       AI_TARGET_YEARS: "2022,2023,2024"
       PYTHONIOENCODING: "utf-8"
+      TZ: "Asia/Tokyo"
 
     steps:
       - name: Checkout

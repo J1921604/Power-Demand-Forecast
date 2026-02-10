@@ -542,19 +542,37 @@ def download_and_extract_latest_data(
     else:
         print("警告: 'TIME'カラムが見つかりません。時刻処理をスキップします。")
 
-    # DATE・TIMEによる重複除去
-    if 'DATE' in combined_df.columns and 'TIME' in combined_df.columns:
-        combined_df.drop_duplicates(subset=['DATE', 'TIME'], inplace=True)
-    else:
-        print("警告: 'DATE'または'TIME'カラムが見つかりません。重複除去をスキップします。")
-
     # 全カラムの改行文字除去
     for col in combined_df.columns:
         combined_df[col] = combined_df[col].astype(str).str.replace('\r', '')
 
-    # 日付・時刻で昇順ソート（AI_vmの並びに合わせる）
+    # DATE/TIME を日時型に統一し、重複除去・正しい時系列ソートを保証
     if 'DATE' in combined_df.columns and 'TIME' in combined_df.columns:
-        combined_df = combined_df.sort_values(['DATE', 'TIME']).reset_index(drop=True)
+        combined_df['DATETIME'] = pd.to_datetime(
+            combined_df['DATE'].astype(str).str.strip() + ' ' + combined_df['TIME'].astype(str).str.strip(),
+            format="%Y/%m/%d %H:%M",
+            errors='coerce'
+        )
+        before_len = len(combined_df)
+        combined_df.dropna(subset=['DATETIME'], inplace=True)
+
+        # 日時重複は最新を優先して1行残す
+        combined_df.drop_duplicates(subset=['DATETIME'], keep='last', inplace=True)
+
+        # 正しい時系列順にソート
+        combined_df = combined_df.sort_values(['DATETIME']).reset_index(drop=True)
+
+        # DATE/TIME をゼロパディングして正規化（例: 2026/02/01, 00:00）
+        combined_df['DATE'] = combined_df['DATETIME'].dt.strftime('%Y/%m/%d')
+        combined_df['TIME'] = combined_df['DATETIME'].dt.strftime('%H:%M')
+
+        combined_df.drop(columns=['DATETIME'], inplace=True)
+
+        after_len = len(combined_df)
+        if before_len != after_len:
+            print(f"重複・無効行を除去: {before_len} → {after_len}")
+    else:
+        print("警告: 'DATE'または'TIME'カラムが見つかりません。重複除去・ソートをスキップします。")
 
     # クリーンアップしたデータをCSVに保存
     try:

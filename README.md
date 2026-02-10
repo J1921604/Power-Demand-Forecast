@@ -254,10 +254,10 @@ py -3.10 --version
 py -3.10 -m venv .venv
 
 # 仮想環境有効化
-.\.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 
 # 仮想環境Python確認
-.\.venv\Scripts\python.exe --version
+.venv\Scripts\python.exe --version
 ```
 
 ### VS Code Pythonインタープリター選択
@@ -510,8 +510,9 @@ py -3.10 generate_metrics.py
 
 **対処**:
 
-- `AI/data/juyo-2026.csv` は **日付→時刻の昇順 (00:00→01:00→02:00)** に整列済み
-- `AI/data/data.py` で **日時インデックスのソート** と **重複時刻の除去（先頭採用）** を実施
+- `AI/tomorrow/data.py` の **最新データ取得** で、`juyo-2026.csv` を **日時型でソート** し、`DATE/TIME` を **ゼロパディング（例: 2026/02/01, 00:00）** に正規化
+- 同一日時の重複行は **最新優先で1行のみ残す**（`download_and_extract_latest_data`）
+- `AI/data/data.py` でも **日時インデックスのソート** と **重複時刻の除去（先頭採用）** を実施
 
 ### Python依存関係エラー
 
