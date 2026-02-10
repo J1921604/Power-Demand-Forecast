@@ -8,9 +8,9 @@
 
 機械学習モデルを用いた電力需要予測システム | GitHub Actions自動更新 | Open-Meteo API連携
 
-**🌐 Live Demo**: https://j1921604.github.io/Power-Demand-Forecast/  
-**📊 GitHub Actions**: [ワークフロー実行状況](https://github.com/J1921604/Power-Demand-Forecast/actions)  
-**📦 最新リリース**: [v1.0.0](https://github.com/J1921604/Power-Demand-Forecast/releases/tag/v1.0.0)  
+**🌐 Live Demo**: https://j1921604.github.io/Power-Demand-Forecast/
+**📊 GitHub Actions**: [ワークフロー実行状況](https://github.com/J1921604/Power-Demand-Forecast/actions)
+**📦 最新リリース**: [v1.0.0](https://github.com/J1921604/Power-Demand-Forecast/releases/tag/v1.0.0)
 **最終更新**: 2025年11月26日
 
 ---
@@ -102,10 +102,10 @@ GitHub Actionsによる完全自動化、Open-Meteo APIからのリアルタイ�
 
 ### CI/CD
 
-| 技術           | 用途                   | 設定                                         |
-| -------------- | ---------------------- | -------------------------------------------- |
+| 技術           | 用途                   | 設定                                                        |
+| -------------- | ---------------------- | ----------------------------------------------------------- |
 | GitHub Actions | 自動ビルド・デプロイ   | Python 3.10.11, 学習年: 2022,2023,2024 (環境変数で一括管理) |
-| GitHub Pages   | 静的サイトホスティング | https://j1921604.github.io/Power-Demand-Forecast/ |
+| GitHub Pages   | 静的サイトホスティング | https://j1921604.github.io/Power-Demand-Forecast/           |
 
 ---
 
@@ -128,6 +128,7 @@ GitHub Actionsによる完全自動化、Open-Meteo APIからのリアルタイ�
 ```
 
 スクリプトが以下を自動確認します：
+
 - ✅ Python 3.10.11の検出
 - ✅ 実行可能パスの確認
 - ✅ requirements.txtの全パッケージインストール状況
@@ -150,6 +151,7 @@ cd Power-Demand-Forecast
 ```
 
 **Python 3.10.11がない場合**:
+
 1. [Python 3.10.11をダウンロード](https://www.python.org/downloads/release/python-31011/)
 2. インストーラー実行時に「**Add Python to PATH**」をチェック
 3. 確認: `py -3.10 --version`
@@ -159,7 +161,7 @@ cd Power-Demand-Forecast
 ```powershell
 # プロジェクトルートで実行（推奨: .venv）
 py -3.10 -m venv .venv
-\.\.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 
 # 依存関係インストール（requirementsはAI/配下）
 py -3.10 -m pip install -r AI\requirements.txt
@@ -175,6 +177,7 @@ py -3.10 -m pip install -r AI\requirements.txt
 ```
 
 自動的に以下が実行されます：
+
 - Python 3.10検出
 - 依存パッケージチェック
 - HTTPサーバー起動（ポート8002）
@@ -282,6 +285,7 @@ pip install -r requirements.txt
 ```
 
 自動的に以下が実行されます：
+
 - Python 3.10検出・バージョン確認
 - 依存パッケージチェック
 - HTTPサーバー起動（http://localhost:8002/）
@@ -295,11 +299,13 @@ pip install -r requirements.txt
 #### Webダッシュボード経由
 
 **方法1: ワンコマンド起動**
+
 ```powershell
 .\start-dashboard.ps1
 ```
 
 **方法2: 手動起動**
+
 ```powershell
 # HTTPサーバー起動
 cd AI
@@ -540,6 +546,7 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
 **問題3: R² < 0.8（精度閾値違反）**
 
 **原因**:
+
 - モデルが適切な学習年で訓練されていない
 - 翌日予測用データの整合性崩れ（`period_info.json` の参照先違い、`tomorrow.csv` の列順違い など）
 
@@ -550,28 +557,26 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
    ```powershell
    cd AI
    $env:AI_TARGET_YEARS = "2022,2023,2024"  # 推奨組み合わせ
-   
+
    # データ前処理（指定された年のみ使用）
    py -3.10 data\data.py
-   
+
    # 全モデルの再学習
    py -3.10 train\LightGBM\LightGBM_train.py      # R²=0.92以上期待
    py -3.10 train\Keras\Keras_train.py            # R²=0.90以上期待
    py -3.10 train\RandomForest\RandomForest_train.py  # R²=0.90以上期待
    py -3.10 train\Pycaret\Pycaret_train.py        # R²=0.90以上期待
    ```
-
 2. **最新データで予測を実行**
 
    ```powershell
    # 最新の電力実績と気温データを取得
    py -3.10 tomorrow\data.py
    py -3.10 tomorrow\temp.py
-   
+
    # 予測実行
    py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
    ```
-
 3. **データ整合性の確認**
 
    `tomorrow/Ytest.csv` の行数が **168行**（7日 × 24時間）であることを確認:
@@ -588,15 +593,15 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
 
   `tomorrow/tomorrow.csv` の列順が **MONTH,WEEK,HOUR,TEMP** であることを確認（重要）:
 
-  ```powershell
+```powershell
   (Import-Csv AI/tomorrow/tomorrow.csv | Select-Object -First 1 | Get-Member -MemberType NoteProperty).Name
-  ```
+```
 
   `tomorrow/period_info.json` が存在し、最新のYtest期間（例: 2026-01-07 00:00:00〜）で保存されていることを確認:
 
-  ```powershell
+```powershell
   Get-Content AI/tomorrow/period_info.json
-  ```
+```
 
 4. **GitHub Actionsでの対処**
 
@@ -608,11 +613,13 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
    ```
 
    手動実行で精度を確認:
+
    - https://github.com/J1921604/Power-Demand-Forecast/actions
    - "Run workflow" をクリック
    - ワークフロー完了後、Actionsログで `最終結果 - RMSE: XXX kW, R2: X.XXXX, MAE: XXX kW` を確認
 
 **期待される結果（目安）**:
+
 - 学習（train/*_train.py）: LightGBM R² ≥ 0.92 / Keras・RandomForest・Pycaret R² ≥ 0.90
 - 翌日予測（tomorrow/*_tomorrow.py のバックテスト部）: R² ≥ 0.80（ワークフロー閾値）
 
