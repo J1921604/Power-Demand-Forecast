@@ -760,7 +760,7 @@ def tomorrow(
         monitor_memory_usage("予測完了")
         
         # 評価指標の計算
-        rmse, r2_score = calculate_evaluation_metrics(Ytest, Ypred)
+        rmse, r2_score = calculate_evaluation_metrics(Ypred, Ytest)
         
         # 予測結果の保存（最適化版）
         save_tomorrow_predictions(Ytomorrow_pred, ytomorrow_csv)
