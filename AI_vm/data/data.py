@@ -48,11 +48,8 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class DataConfig:
     """データ処理設定クラス（設定値統一管理）"""
-    # ベースディレクトリの自動検出
-    _BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
-    
-    POWER_DATA_PATTERN: str = os.path.join(_BASE_DIR, 'juyo-*.csv')
-    TEMP_DATA_PATTERN: str = os.path.join(_BASE_DIR, 'temperature-*.csv')
+    POWER_DATA_PATTERN: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\juyo-*.csv"
+    TEMP_DATA_PATTERN: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\temperature-*.csv"
     POWER_DATA_SKIPROWS: int = 3
     TEMP_DATA_SKIPROWS: int = 5
     POWER_FILE_YEAR_SLICE: slice = slice(5, 9)  # "juyo-YYYY.csv"のYYYY部分
@@ -586,17 +583,14 @@ def main() -> None:
         - 性能最適化
     """
     try:
-        # ベースディレクトリの自動検出
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
-        
-        # ファイルパス設定（相対パス）
-        x_csv: str = os.path.join(base_dir, 'X.csv')
-        y_csv: str = os.path.join(base_dir, 'Y.csv')
+        # ファイルパス設定
+        x_csv: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\X.csv"
+        y_csv: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Y.csv"
         test_size: float = config.DEFAULT_TEST_SIZE
-        Xtrain_csv: str = os.path.join(base_dir, 'Xtrain.csv')
-        Xtest_csv: str = os.path.join(base_dir, 'Xtest.csv')
-        Ytrain_csv: str = os.path.join(base_dir, 'Ytrain.csv')
-        Ytest_csv: str = os.path.join(base_dir, 'Ytest.csv')
+        Xtrain_csv: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Xtrain.csv"
+        Xtest_csv: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Xtest.csv"
+        Ytrain_csv: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Ytrain.csv"
+        Ytest_csv: str = r"C:\Users\Z9995695\Documents\UiPath\Python連携AI電力需要予測モデル_v2\AI\data\Ytest.csv"
         
         # データ処理実行
         result = data(x_csv, y_csv, test_size, Xtrain_csv, Xtest_csv, Ytrain_csv, Ytest_csv)

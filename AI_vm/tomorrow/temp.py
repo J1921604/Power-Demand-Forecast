@@ -312,8 +312,8 @@ def create_temperature_dataframe(api_data: Dict[str, Any]) -> pd.DataFrame:
         df['HOUR'] = df['time'].dt.hour.astype('int64')
         df['TEMP'] = df['TEMP'].astype(config.FLOAT_PRECISION)  # メモリ効率化
         
-        # 必要なカラムのみ選択（正しい順序でメモリ削減）
-        result_df = df[['MONTH', 'WEEK', 'HOUR', 'TEMP']].copy()
+        # 必要なカラムのみ選択（メモリ削減）
+        result_df = df[config.REQUIRED_COLUMNS].copy()
         
         # 不要なオブジェクトを即座に削除
         del df
