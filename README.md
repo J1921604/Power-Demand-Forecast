@@ -640,21 +640,17 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
   C:\Users\h-ham\spec-kit\Power-Demand-Forecast\.venv\Scripts\python.exe AI\generate_metrics.py
   ```
 
-  **補足**: 既存の予測CSVがある場合はキャッシュを優先します。再生成が必要な場合は以下を実行してください。
-
-  ```powershell
-  $env:AI_FORCE_REPREDICT = "1"
-  ```
+  **補足**: 明日予測は常に再生成します（既存の予測CSVは再利用しません）。
 
 2. 出力が以下と一致することを確認
 
   ```
   Metrics Aggregation for GitHub Pages
   ============================================================
-  ✓ LightGBM: RMSE=216.171, R2=0.8298, MAE=166.169
-  ✓ Keras: RMSE=190.07, R2=0.8684, MAE=152.245
-  ✓ RandomForest: RMSE=248.818, R2=0.7745, MAE=166.591
-  ✓ Pycaret: RMSE=224.641, R2=0.8162, MAE=170.624
+  ✓ LightGBM: RMSE=226.351, R2=0.8134, MAE=182.596
+  ✓ Keras: RMSE=209.131, R2=0.8407, MAE=163.672
+  ✓ RandomForest: RMSE=220.661, R2=0.8227, MAE=177.785
+  ✓ Pycaret: RMSE=226.942, R2=0.8124, MAE=181.483
   ```
 
 3. `AI/metrics.json` が更新されたことを確認し、GitHub Pagesを再デプロイ
