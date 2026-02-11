@@ -640,6 +640,12 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
   C:\Users\h-ham\spec-kit\Power-Demand-Forecast\.venv\Scripts\python.exe AI\generate_metrics.py
   ```
 
+  **補足**: 既存の予測CSVがある場合はキャッシュを優先します。再生成が必要な場合は以下を実行してください。
+
+  ```powershell
+  $env:AI_FORCE_REPREDICT = "1"
+  ```
+
 2. 出力が以下と一致することを確認
 
   ```

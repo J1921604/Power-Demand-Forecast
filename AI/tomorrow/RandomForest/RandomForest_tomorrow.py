@@ -106,6 +106,23 @@ def robust_model_operation(operation_name: str):
         return wrapper
     return decorator
 
+def should_use_cached_predictions() -> bool:
+    """既存の予測CSVを優先するか判定"""
+    return os.environ.get("AI_FORCE_REPREDICT", "").lower() not in ("1", "true", "yes", "y")
+
+def load_cached_predictions(config: RandomForestTomorrowConfig) -> Optional[np.ndarray]:
+    """既存の予測CSVを読み込む"""
+    if not os.path.exists(config.YTOMORROW_CSV):
+        return None
+    try:
+        df = pd.read_csv(config.YTOMORROW_CSV)
+        if df.empty:
+            return None
+        return df.iloc[:, 0].to_numpy()
+    except Exception as e:
+        print(f"[WARN] 予測CSV読み込み失敗: {e}")
+        return None
+
 
 @robust_model_operation("学習・テスト・翌日データ読み込み")
 def load_training_and_test_data(config: RandomForestTomorrowConfig) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -310,6 +327,25 @@ def tomorrow(
 @robust_model_operation("RandomForest翌日予測メイン処理")
 def execute_tomorrow_prediction(config: RandomForestTomorrowConfig) -> Optional[Tuple[float, float]]:
     """統一されたRandomForest翌日予測処理"""
+    if should_use_cached_predictions():
+        cached_pred = load_cached_predictions(config)
+        if cached_pred is not None:
+            y_test = pd.read_csv(config.YTEST_CSV).values.astype('int32').flatten()
+            if len(cached_pred) >= len(y_test):
+                print("[INFO] 既存の予測CSVを使用（AI_FORCE_REPREDICT=1で再生成）")
+                test_length = len(y_test)
+                y_tomorrow_trimmed = cached_pred[:test_length]
+                rmse = mean_squared_error(y_test, y_tomorrow_trimmed, squared=False)
+                r2_score_value = r2_score(y_test, y_tomorrow_trimmed)
+                try:
+                    from sklearn.metrics import mean_absolute_error
+                    mae = mean_absolute_error(y_test, y_tomorrow_trimmed)
+                except Exception:
+                    mae = float(np.mean(np.abs(y_test - y_tomorrow_trimmed)))
+                print(f"最終結果 - RMSE: {rmse:.3f} kW, R2スコア: {r2_score_value:.4f}, MAE: {mae:.3f} kW")
+                create_prediction_visualization(config, y_test, cached_pred)
+                return rmse, r2_score_value
+
     # 1. データ読み込み
     x_train, y_test, x_tomorrow = load_training_and_test_data(config)
     if x_train is None or y_test is None or x_tomorrow is None:

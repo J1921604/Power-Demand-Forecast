@@ -120,6 +120,23 @@ def robust_model_operation(operation_name: str):
         return wrapper
     return decorator
 
+def should_use_cached_predictions() -> bool:
+    """既存の予測CSVを優先するか判定"""
+    return os.environ.get("AI_FORCE_REPREDICT", "").lower() not in ("1", "true", "yes", "y")
+
+def load_cached_predictions(config: LightGBMTomorrowConfig) -> Optional[pd.DataFrame]:
+    """既存の予測CSVを読み込む"""
+    if not os.path.exists(config.YTOMORROW_CSV):
+        return None
+    try:
+        df = pd.read_csv(config.YTOMORROW_CSV)
+        if df.empty:
+            return None
+        return df.iloc[:, 0].to_numpy()
+    except Exception as e:
+        print(f"[WARN] 予測CSV読み込み失敗: {e}")
+        return None
+
 @robust_model_operation("学習データ読み込み")
 def load_training_data(config: LightGBMTomorrowConfig) -> Tuple[pd.DataFrame, StandardScaler]:
     """学習データを読み込み、標準化スケーラーを作成"""
@@ -301,6 +318,22 @@ def execute_tomorrow_prediction(config: LightGBMTomorrowConfig) -> Tuple[Optiona
     Returns:
         Tuple[RMSE, Score, R2, MAE]
     """
+    if should_use_cached_predictions():
+        cached_pred = load_cached_predictions(config)
+        if cached_pred is not None:
+            y_test = pd.read_csv(config.YTEST_CSV).values.astype('int32').flatten()
+            if len(cached_pred) >= len(y_test):
+                print("[INFO] 既存の予測CSVを使用（AI_FORCE_REPREDICT=1で再生成）")
+                eval_pred = cached_pred[:len(y_test)]
+                mse = mean_squared_error(y_test, eval_pred)
+                reg_rmse = mse ** 0.5
+                reg_score = 0.0 if y_test.mean() == 0 else 1.0 - reg_rmse / y_test.mean()
+                r2 = r2_score(y_test, eval_pred)
+                mae = mean_absolute_error(y_test, eval_pred)
+                print(f"最終結果 - RMSE: {reg_rmse:.3f} kW, R2: {r2:.4f}, MAE: {mae:.3f} kW")
+                generate_prediction_graph(config, cached_pred, y_test)
+                return reg_rmse, reg_score, r2, mae
+
     # 1. 学習データ読み込み・標準化スケーラー作成
     result = load_training_data(config)
     if result is None:

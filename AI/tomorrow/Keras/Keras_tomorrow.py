@@ -159,6 +159,23 @@ def enforce_window_length(y_values: np.ndarray, expected_rows: int, label: str) 
 
     raise ValueError(f"{label} 行数が不足しています: {actual_rows} 行 (期待値 {expected_rows} 行)")
 
+def should_use_cached_predictions() -> bool:
+    """既存の予測CSVを優先するか判定"""
+    return os.environ.get("AI_FORCE_REPREDICT", "").lower() not in ("1", "true", "yes", "y")
+
+def load_cached_predictions(csv_path: str) -> Optional[np.ndarray]:
+    """既存の予測CSVを読み込む"""
+    if not os.path.exists(csv_path):
+        return None
+    try:
+        df = pd.read_csv(csv_path)
+        if df.empty:
+            return None
+        return df.iloc[:, 0].to_numpy(dtype='float32')
+    except Exception as e:
+        print(f"[WARN] 予測CSV読み込み失敗: {e}")
+        return None
+
 # パフォーマンス監視関数
 def monitor_memory_usage(stage: str) -> float:
     """メモリ使用量監視（統一版）"""
@@ -864,6 +881,20 @@ def tomorrow(
         # パフォーマンス監視開始
         monitor_memory_usage("明日予測処理開始")
         start_memory = 0.0  # デフォルト値
+
+        # 既存の予測CSVがある場合はキャッシュを優先
+        if should_use_cached_predictions() and os.path.exists(ytomorrow_csv):
+            cached_pred = load_cached_predictions(ytomorrow_csv)
+            if cached_pred is not None:
+                ytest = pd.read_csv(ytest_csv).values.astype('float32').flatten()
+                expected_rows = config.PAST_DAYS * 24
+                ytest = enforce_window_length(ytest, expected_rows, "Ytest")
+                if len(cached_pred) >= len(ytest):
+                    print("[INFO] 既存の予測CSVを使用（AI_FORCE_REPREDICT=1で再生成）")
+                    eval_pred = cached_pred[:len(ytest)].copy()
+                    rmse, r2_score = calculate_evaluation_metrics(eval_pred, ytest)
+                    create_prediction_visualization(eval_pred, ytest, cached_pred, model_sav, ytomorrow_png, int(past_days))
+                    return rmse, r2_score
         
         # 訓練・テストデータの読み込み（最適化版）
         Xtrain, Xtest, Ytrain = load_training_data(xtrain_csv, xtest_csv, ytrain_csv)
