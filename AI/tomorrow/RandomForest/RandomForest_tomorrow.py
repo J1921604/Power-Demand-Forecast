@@ -176,7 +176,7 @@ def predict_with_model(model, x_tomorrow: np.ndarray, y_test: np.ndarray) -> np.
     
     # テスト部分で精度評価
     test_accuracy = model.score(x_test_part, y_test)
-    print(f"テスト精度（R²スコア参考値）: {test_accuracy:.3f}")
+    print(f"テスト精度（R2スコア参考値）: {test_accuracy:.3f}")
     
     # 全期間の予測（過去7日分+予測7日分）
     y_tomorrow = model.predict(x_tomorrow)
