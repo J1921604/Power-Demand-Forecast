@@ -648,7 +648,7 @@ py -3.10 tomorrow\LightGBM\LightGBM_tomorrow.py
   Metrics Aggregation for GitHub Pages
   ============================================================
   ✓ LightGBM: RMSE=216.171, R2=0.8298, MAE=166.169
-  ✓ Keras: RMSE=209.131, R2=0.8407, MAE=163.672
+  ✓ Keras: RMSE=189.587, R2=0.8691, MAE=151.431
   ✓ RandomForest: RMSE=248.818, R2=0.7745, MAE=166.591
   ✓ Pycaret: RMSE=224.641, R2=0.8162, MAE=170.624
   ```

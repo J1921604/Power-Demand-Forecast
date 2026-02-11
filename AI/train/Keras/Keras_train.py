@@ -26,6 +26,11 @@ import pickle
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 
+# 再現性のためのTensorFlow設定（インポート前に環境変数を固定）
+os.environ.setdefault('TF_DETERMINISTIC_OPS', '1')
+os.environ.setdefault('TF_CUDNN_DETERMINISTIC', '1')
+os.environ.setdefault('TF_ENABLE_ONEDNN_OPTS', '0')
+
 # Keras/TensorFlowインポート
 from keras.models import Sequential
 from keras.layers import Dense, Dropout
@@ -37,8 +42,13 @@ from tensorflow.python.keras.callbacks import EarlyStopping
 import random
 import tensorflow as tf
 random.seed(42)
-np.random.seed(42) 
+np.random.seed(42)
 tf.random.set_seed(42)
+try:
+    tf.keras.utils.set_random_seed(42)
+    tf.config.experimental.enable_op_determinism()
+except Exception:
+    pass
 
 # パフォーマンス最適化設定（統合版）
 warnings.filterwarnings('ignore', category=UserWarning)

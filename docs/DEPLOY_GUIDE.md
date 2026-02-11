@@ -760,10 +760,10 @@ Get-ChildItem -Recurse -Filter *.png AI/tomorrow/
   ```
   Metrics Aggregation for GitHub Pages
   ============================================================
-  ✓ LightGBM: RMSE=226.351, R2=0.8134, MAE=182.596
-  ✓ Keras: RMSE=209.131, R2=0.8407, MAE=163.672
-  ✓ RandomForest: RMSE=220.661, R2=0.8227, MAE=177.785
-  ✓ Pycaret: RMSE=226.942, R2=0.8124, MAE=181.483
+  ✓ LightGBM: RMSE=216.171, R2=0.8298, MAE=166.169
+  ✓ Keras: RMSE=189.587, R2=0.8691, MAE=151.431
+  ✓ RandomForest: RMSE=248.818, R2=0.7745, MAE=166.591
+  ✓ Pycaret: RMSE=224.641, R2=0.8162, MAE=170.624
   ```
 
 3. `AI/metrics.json` の更新後にデプロイを再実行
